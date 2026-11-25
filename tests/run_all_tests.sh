@@ -157,6 +157,11 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
     "${HHKB_TEST_DIR}/test_rapid_trigger"
     rm -f "${HHKB_TEST_DIR}/test_rapid_trigger"
     clang -std=c11 -Wall -Wextra -Werror -O2 -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
+        "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/test_rt_lockout.c" \
+        -o "${HHKB_TEST_DIR}/test_rt_lockout"
+    "${HHKB_TEST_DIR}/test_rt_lockout"
+    rm -f "${HHKB_TEST_DIR}/test_rt_lockout"
+    clang -std=c11 -Wall -Wextra -Werror -O2 -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
         "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/rapid_trigger_reference.c" \
         "${HHKB_TEST_DIR}/test_scan_processing.c" -o /tmp/dmk-scan-processing-test
     /tmp/dmk-scan-processing-test

@@ -74,6 +74,8 @@ static int keyboard_get_flat_key_index(unsigned row,unsigned col){
  return col*MATRIX_ROWS+row;
 }
 static bool hhkb_hybrid_on_battery(void){return false;}
+static uint8_t scan_rate;
+static uint8_t hhkb_get_effective_scan_rate(void){return scan_rate;}
 static void scan_adc_prepare(void){}
 static void scan_adc_idle(void){assert(!primask && !converting);}
 static void hhkb_record_matrix_scan(void){}
@@ -147,13 +149,17 @@ int main(void){
   adc.CFGR1=(pass%2)?ADC_CFGR1_AUTOFF:0;
   debug=pass%4!=0;capture=pass%6==0;calibrating=capture || pass%6==1;
   fault=pass%12==0?(pass?0:KEYS-1):(pass%7==0?pass*17%KEYS:1000);
+  scan_rate=(pass*3)%8;
+  static const uint8_t lock_model[7]={1,1,3,5,15,2,1};
+  uint8_t lock_n=lock_model[scan_rate>6?6:scan_rate];
   bool changed=false;
   for(unsigned i=0;i<KEYS;++i){
    unsigned col=columns[i],row=rows[i];
    raw[i]=(i*83+pass*307)%4096;
-   bool down=i==fault?reference[col][row].down:rt_update_curve(&reference[col][row],&cfg,raw[i],ec_curve_lut);
+   if(i==fault)continue; // timeout: reported bit and lock stay unchanged
+   bool down=rt_update_curve(&reference[col][row],&cfg,raw[i],ec_curve_lut);
    matrix_row_t previous=expected[row];
-   if(down)expected[row]|=1u<<col;else expected[row]&=~(1u<<col);
+   if(rt_lockout(&reference[col][row],down,(previous>>col)&1u,lock_n))expected[row]|=1u<<col;else expected[row]&=~(1u<<col);
    changed|=previous!=expected[row];
   }
   starts=finishes=reports=captures=peaks=0;reported_index=debug_index=0;
@@ -165,11 +171,22 @@ int main(void){
   assert(restarts-before_restart==(capture && fault<KEYS));
   assert(decrements-before_decrement==(capture && fault>=KEYS));
   assert(!memcmp(matrix,expected,sizeof(matrix)));
+  for(unsigned i=0;i<KEYS;++i)assert(s_rt_keys[columns[i]][rows[i]].lock==reference[columns[i]][rows[i]].lock);
   assert(!primask && !converting);
   // A second full acquisition at the same tick keeps key processing live
   // while the 20-ms telemetry gate suppresses all per-key debug callbacks.
   starts=finishes=reports=captures=peaks=0;reported_index=debug_index=0;
-  assert(!hhkb_matrix_scan_raw(matrix));
+  changed=false;
+  for(unsigned i=0;i<KEYS;++i){
+   unsigned col=columns[i],row=rows[i];
+   if(i==fault)continue;
+   bool down=rt_update_curve(&reference[col][row],&cfg,raw[i],ec_curve_lut);
+   matrix_row_t previous=expected[row];
+   if(rt_lockout(&reference[col][row],down,(previous>>col)&1u,lock_n))expected[row]|=1u<<col;else expected[row]&=~(1u<<col);
+   changed|=previous!=expected[row];
+  }
+  assert(hhkb_matrix_scan_raw(matrix)==changed);
+  assert(!memcmp(matrix,expected,sizeof(matrix)));
   assert(starts==KEYS && reports==0);
  }
  printf("%u-key pipeline passed order, same-frame flush, RT, calibration, debug and timeout checks\n",KEYS);

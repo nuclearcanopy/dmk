@@ -65,19 +65,23 @@ void scan_prepare_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan, bo
 // Logging and calibration callbacks must stay outside the acquisition IRQ mask.
 static inline __attribute__((always_inline))
 bool scan_process_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan,
-                          matrix_row_t matrix[]) {
+                          matrix_row_t matrix[], uint8_t lock_n) {
     if (!pending->valid) return false;
     rt_key_t *key = &s_rt_keys[pending->col][pending->row];
     matrix_row_t previous = matrix[pending->row];
     if (pending->raw == UINT16_MAX) {
+        // Timeout: reported bit and lockout state stay as they were.
         pending->pressed = key->down;
+        return false;
     } else if (scan->cfg.rt_enabled) {
         pending->pressed = rt_update_scan_cached(key, &s_scan_cache.key[pending->col][pending->row], scan, pending->raw, NULL);
     } else {
         pending->pressed = rt_update_raw_cached(key, &s_scan_cache.key[pending->col][pending->row], pending->raw);
     }
-    if (pending->pressed) matrix[pending->row] |= 1U << pending->col;
-    else matrix[pending->row] &= ~(1U << pending->col);
+    // pending->pressed stays pre-lockout for the debug feed.
+    matrix_row_t bit = 1U << pending->col;
+    if (rt_lockout(key, pending->pressed, (previous & bit) != 0, lock_n)) matrix[pending->row] |= bit;
+    else matrix[pending->row] &= ~bit;
     return previous != matrix[pending->row];
 }
 
@@ -254,6 +258,10 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
     rt_prepare_scan(&prepared, &scan_cfg, curve);
     hhkb_scan_cache_prepare(&s_scan_cache, s_rt_keys, &prepared, rt_range_revision, ec_curve_revision);
     scan_pending_t pending = {0};
+    // Chatter lockout in scans, by effective scan rate (4 = 1000 Hz).
+    static const uint8_t lock_scans[7] = {1, 1, 3, 5, 15, 2, 1};
+    uint8_t lock_rate = hhkb_get_effective_scan_rate();
+    uint8_t lock_n = lock_scans[lock_rate > 6 ? 6 : lock_rate];
 
     for (uint8_t col = 0; col < MATRIX_COLS; col++) {
         if (col == 8) {
@@ -274,7 +282,7 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
             GPIOC->BSRR = (1U << 8);
             uint16_t discharge_start = (uint16_t)TIM2->CNT;
             scan_prepare_pending(&pending, &prepared, debug_topre);
-            changed |= scan_process_pending(&pending, &prepared, current_matrix);
+            changed |= scan_process_pending(&pending, &prepared, current_matrix, lock_n);
             scan_report_pending(&pending, false, false, debug_topre, &capture_failed);
             scan_wait_since(discharge_start, 2);
             scan_wait_since(settle_start, 4);
@@ -308,7 +316,7 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
 
     // Flush the last key in this pass; no sample is deferred to the next scan.
     scan_prepare_pending(&pending, &prepared, debug_topre);
-    changed |= scan_process_pending(&pending, &prepared, current_matrix);
+    changed |= scan_process_pending(&pending, &prepared, current_matrix, lock_n);
     scan_report_pending(&pending, false, false, debug_topre, &capture_failed);
 
     // Disable OpAmp

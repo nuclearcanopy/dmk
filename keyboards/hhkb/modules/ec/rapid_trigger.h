@@ -31,11 +31,23 @@ typedef struct {
 
 typedef struct {
     uint16_t base;     /* ADC counts at rest                          */
+    uint8_t  lock;     /* scans left in the leading-edge lockout       */
     uint32_t scale;    /* (1000 << 16) / range, avoids division in scan */
     int16_t  ext;      /* local extreme (max while down, min while up) */
     bool     down;     /* current logical state                        */
     bool     latched;  /* crossed act_pm since last visit to reset zone */
 } rt_key_t;
+
+_Static_assert(sizeof(rt_key_t) == 12, "rt_key_t must stay 12 bytes");
+
+/* Leading-edge lockout: an edge is reported at once, then further edges are
+ * held off for n scans. n = 0 or 1 passes the input through unchanged. */
+static inline __attribute__((always_inline))
+bool rt_lockout(rt_key_t *k, bool rt_down, bool reported, uint8_t n) {
+    if (k->lock) k->lock--;
+    if (!k->lock && rt_down != reported) { reported = rt_down; k->lock = n; }
+    return reported;
+}
 
 /* Prepared once per scan; classic thresholds are inverted only on settings or
  * calibrated-range changes. Raw cache targets the HHKB 12-bit ADC (0..4095). */

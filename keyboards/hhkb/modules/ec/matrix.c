@@ -138,6 +138,8 @@ static void publish_released_matrix(matrix_row_t published_state[MATRIX_ROWS]) {
     xQueueReset(matrix_queue);
     for (uint8_t row = 0; row < MATRIX_ROWS; ++row) {
         s_matrix_state[row] = 0;
+        for (uint8_t col = 0; col < MATRIX_COLS; ++col)
+            hhkb_get_rt_key(col, row)->lock = 0;
         matrix_event_t event = {
             .row = MATRIX_EVENT_ROW_SNAPSHOT |
                    (row == 0 ? MATRIX_EVENT_SCAN_START : 0) | row,
