@@ -14,6 +14,7 @@ void rt_cfg_defaults(rt_cfg_t *c) {
 
 void rt_key_reset(rt_key_t *k) {
     k->ext     = 0;
+    k->lock    = 0;
     k->down    = false;
     k->latched = false;
 }
