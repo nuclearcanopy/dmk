@@ -180,7 +180,7 @@ enum layers {
 
 // clang-format off
 /**
- * 60-key HHKB Classic Layout:
+ * 60-key HHKB Layout:
  * Row 0 (15): Esc, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, -, =, \, `
  * Row 1 (14): Tab, Q, W, E, R, T, Y, U, I, O, P, [, ], Backspace
  * Row 2 (13): LCtrl, A, S, D, F, G, H, J, K, L, ;, ', Enter

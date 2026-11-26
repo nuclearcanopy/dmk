@@ -170,7 +170,7 @@ bool hhkb_compact_legacy_allowed(void) {
 bool hhkb_compact_writable(void) { c_init(); return !c_blocked; }
 const char *hhkb_compact_status(void) { c_init(); return c_status; }
 /* Header/tail retain the original settings representation; only actual keys'
- * ADC ranges are packed. JIS holes are reconstructed as zero, then CRC rebuilt. */
+ * ADC ranges are packed. Unpopulated positions are reconstructed as zero, then CRC rebuilt. */
 uint16_t hhkb_storage_crc16(const uint8_t *p, size_t n) {
     uint16_t crc = 0xffff;
     while (n--) { crc ^= (uint16_t)*p++ << 8; for(unsigned b=0;b<8;++b) crc = (crc&0x8000)?(crc<<1)^0x1021:crc<<1; }
@@ -411,7 +411,7 @@ bool hhkb_storage_erase_early(void) {
     static const struct { uint16_t offset, words; uint32_t magic; } old[] = {
         {0x600,244,0x314b4d44U}, {0x9d0,244,0x314b4d44U}, /* ANSI DMK1 */
         {0x600,320,0x324b4d44U}, {0xb00,320,0x324b4d44U}, /* ANSI DMK2 */
-        {0x600,316,0x324a4d44U}, {0xaf0,316,0x324a4d44U}, /* JIS DMK2 */
+        {0x600,316,0x324a4d44U}, {0xaf0,316,0x324a4d44U}, /* legacy non-ANSI DMK2 */
     };
     unsigned mask = 0;
     for (unsigned n = 0; n < sizeof(old)/sizeof(old[0]); ++n) {

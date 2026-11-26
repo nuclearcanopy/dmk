@@ -15,7 +15,7 @@ class IdleScanTest(unittest.TestCase):
         exe = Path(tmp) / f'idle_{period}'
         subprocess.run(['clang', '-std=c11', '-Wall', '-Wextra', '-Werror', '-O2',
                         f'-DTEST_PERIOD_MS={period}', '-I', str(EC),
-                        str(ROOT / 'tests/hhkb_classic/test_idle_scan.c'), '-o', str(exe)],
+                        str(ROOT / 'tests/hhkb/test_idle_scan.c'), '-o', str(exe)],
                        check=True)
         return exe
 

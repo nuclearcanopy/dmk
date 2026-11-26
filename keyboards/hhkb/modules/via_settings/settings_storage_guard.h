@@ -9,7 +9,7 @@ static inline size_t hhkb_settings_owned_size(uint32_t magic, uint32_t current_m
                                                size_t old_a_size, size_t old_b_size,
                                                size_t old_c_size) {
     if (magic == current_magic) return current_size;
-    // Never interpret an ANSI record using JIS geometry (or vice versa).
+    // Never interpret a record using another model's matrix geometry.
     if (current_magic == 0x484b4a45U && magic != 0) return SIZE_MAX;
     switch (magic) {
     case 0: return 0;

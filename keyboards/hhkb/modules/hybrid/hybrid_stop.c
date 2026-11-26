@@ -75,7 +75,7 @@ void hhkb_hybrid_enter_stop(void) {
     ADC1->CR &= ~ADC_CR_ADVREGEN;
     GPIOC->BRR = (1UL << 14) | (1UL << 7) | (1UL << 8);
     GPIOA->BRR = (1UL << 8) | (1UL << 9);
-    // Remove drive from all rows (including JIS PB11) and mux address lines.
+    // Remove drive from all rows and mux address lines.
     GPIOB->BRR = 0xFC07UL;
     GPIOC->BRR = 1UL << 6;
 

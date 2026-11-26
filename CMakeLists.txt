@@ -121,7 +121,7 @@ get_filename_component(DMK_ROOT "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 if(KEYBOARD STREQUAL "hhkb")
     string(REPLACE "," ";" HHKB_MODELS "${DEFINE}")
     # nxmk: radio-free fork for the HHKB Hybrid (ANSI) only.
-    if(NOT "HHKB_HYBRID" IN_LIST HHKB_MODELS OR "HHKB_JIS" IN_LIST HHKB_MODELS)
+    if(NOT "HHKB_HYBRID" IN_LIST HHKB_MODELS)
         message(FATAL_ERROR "nxmk only builds the HHKB Hybrid (ANSI): use -d HHKB_HYBRID")
     endif()
     set(HHKB_BUILD_HYBRID ON)
