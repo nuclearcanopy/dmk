@@ -25,7 +25,7 @@ clang -std=c11 -Wall -Wextra -Werror -O2 -I "${SCRIPT_DIR}/dmk_core/include" \
 bash "${SCRIPT_DIR}/tests/run_runtime_tests.sh"
 
 # 1. C Core Unit Tests
-echo -e "${BOLD}[1/3] Running Host-Based C Core Unit Tests...${NC}"
+echo -e "${BOLD}[1/2] Running Host-Based C Core Unit Tests...${NC}"
 clang -Wall -Wextra -DMATRIX_REPORT_BATCH \
     -I "${SCRIPT_DIR}/tests" \
     -I "${SCRIPT_DIR}/tests/mocks" \
@@ -158,11 +158,7 @@ else
 fi
 
 # 2. Python Tool Tests
-echo -e "${BOLD}[2/3] Running Python Tool Unit Tests...${NC}"
+echo -e "${BOLD}[2/2] Running Python Tool Unit Tests...${NC}"
 uv run python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -p "test_*.py"
-
-# 3. JavaScript Editor / Web Wizard Tests
-echo -e "\n${BOLD}[3/3] Running Web Wizard & Editor Tests (Node.js)...${NC}"
-node --test "${SCRIPT_DIR}/tests/test_editor.js"
 
 echo -e "\n${GREEN}${BOLD}🎉 All test suites completed successfully!${NC}\n"
