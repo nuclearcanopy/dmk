@@ -686,8 +686,13 @@ int dmk_snprintf(char *buf, size_t size, const char *fmt, ...) {
     return len;
 }
 
+#ifdef HHKB_SCAN_DIAGNOSTICS
+#define CONSOLE_PRINTF_MAX 192  // [SCAN] line exceeds 128 B
+#else
+#define CONSOLE_PRINTF_MAX 128
+#endif
 void debug_console_printf(const char *fmt, ...) {
-    char tmp[128];
+    char tmp[CONSOLE_PRINTF_MAX];
     va_list args;
     va_start(args, fmt);
     int len = dmk_vsnprintf(tmp, sizeof(tmp), fmt, args);

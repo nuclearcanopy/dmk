@@ -25,7 +25,12 @@
 #define VIAL 1
 #endif
 #define DEBUG_CONSOLE_ENABLE 1
+#ifdef HHKB_SCAN_DIAGNOSTICS
+// [USB]+[LAT]+[SCAN] (~135 B) must fit together; whole messages drop when full.
+#define CONSOLE_BUF_SIZE 512
+#else
 #define CONSOLE_BUF_SIZE 128
+#endif
 #ifndef NO_GAMEPAD
 #define NO_GAMEPAD
 #endif
