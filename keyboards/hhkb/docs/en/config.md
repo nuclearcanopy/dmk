@@ -1,126 +1,131 @@
-**Language:** [English](config.md) | [Русский](../ru/config.md)
-
-**Documentation:** [Install](install.md) • [Backup & restore](backup-restore.md) • [Build](build.md) • [Config](config.md) • [Models](models.md) • [VIA & Debug](via-debug.md)
+**Documentation:** [Install](install.md) • [Backup & restore](backup-restore.md) • [Build](build.md) • [Config](config.md) • [VIA & debug](via-debug.md)
 
 # Configuration
 
-## Build Definitions
+Everything here is read from `keyboards/hhkb/config.h` and the modules under
+`keyboards/hhkb/modules/` unless marked *unverified*.
 
-- `HHKB_CLASSIC` builds firmware for wired HHKB Classic (ANSI).
-- `HHKB_CLASSIC_TYPE_S` builds firmware for wired Classic Type-S (ANSI or JIS when paired with `HHKB_JIS`).
-- `HHKB_HYBRID` builds firmware for wireless Hybrid and Hybrid Type-S (enables SPI communications with Nordic nRF, battery management, profiles, and STOP mode).
-- `HHKB_JIS` enables support for the 69-key Japanese JIS matrix (sparse matrix, 15 columns, Kana/Henkan/Muhenkan keys, and arrow cluster).
-- `HHKB_SCAN_DIAGNOSTICS` adds measurement counters accessible over SWD.
-- `HHKB_SOF_LOCK` (default 1) locks the scan to the USB frame so reports reach the host's next poll sooner; `HHKB_SOF_MARGIN_US` (default 150) is the lead margin. With `HHKB_SCAN_DIAGNOSTICS`, the HID console prints `[LAT]` (report age, lock state, phase error).
+## Build definitions
 
-## Matrix Scanning
+Pass extra definitions to `build_all.sh -d` after `HHKB_HYBRID`, comma
+separated (see [Build](build.md)).
 
-- **ANSI (60 keys):** 15 columns × 4 rows matrix (all positions populated).
-- **JIS (69 keys):** 15 columns × 5 logical rows matrix (69 physical switches, active `populated` mask).
-
-DMK selects the multiplexer column, pulses `PC8` to discharge measurement capacitor `C57`, pulls the target row active `LOW`, waits for analog settling, performs ADC conversion, restores the row to `HIGH`, and proceeds to the next key. `PC14` powers the analog matrix circuit, `PC7` enables the op-amp, and `PA1` serves as `ADC1_IN1`.
-
-The timer-driven scanner is enabled by default. VIA selects 50, 125, 250, 500, or 1000 Hz. At 1000 Hz the nominal period is 1000 µs, with SOF synchronization adjusting scan phase relative to the USB frame. The scanner runs from SRAM, with TIM2 providing analog delays.
-
-### USB SOF measurements on Classic ANSI
-
-SOF synchronization is enabled by default through `HHKB_SOF_LOCK=1`. Use the session toggle in VIA under Scan Rate for an A/B comparison. USB diagnostics, Polling Rate Monitor and the other VIA debug controls remain available. The implementation is described in [PR #10](https://github.com/aroum/dmk/pull/10).
-
-On November 25, 2026, the user tested HHKB Classic ANSI on Linux/Chromium with debug firmware `6af27377` from [Actions #45550849676](https://github.com/aroum/dmk/actions/runs/45550849676). That firmware allowed switching SOF through VIA. The user waited 10 seconds before each recording, then pressed keys. Logs `hid-console-2026-11-25T06-49-12.743Z.txt` and `hid-console-2026-11-25T06-49-44.669Z.txt` correspond to SOF On and Off. The logs do not record the remaining settings or USB topology.
-
-| HID Console metric | SOF On | SOF Off |
+| Define | Default | Effect |
 | --- | --- | --- |
-| Nonzero per-interval `age_avg` | 948–984 µs, usually 948–949 | 988–1217 µs |
-| Typical per-interval `age_max` | 950–952 µs | 2265–2347 µs |
-| Largest recorded `age_max` | 2942 µs | 2906 µs |
-| Diagnostic phase error `err` | −5…+3 µs | lock disabled |
-| New drops/resynchronizations | 0 / 0 | 0 / 0 |
+| `HHKB_HYBRID` | required | Selects the only supported target. Enables the USB/battery source detection and battery STOP module. |
+| `HHKB_SOF_LOCK` | `1` | Locks the scan to the USB frame so reports reach the host's next poll sooner. `-d ...,HHKB_SOF_LOCK=0` builds without it. |
+| `HHKB_SOF_MARGIN_US` | `150` | Lead margin (microseconds) added to the tracked scan work time when the lock picks its target. |
+| `HHKB_SCAN_DIAGNOSTICS` | defined (`1`) | Adds scan counters, the `[SCAN]`/`[LAT]` console lines and the SWD-visible counters. The code tests it with `#ifdef`, so passing `=0` does **not** turn it off; removing the default in `config.h` would. |
+| `HHKB_SW6_REBOOT_TO_BANK1` | `1` | SW6/SW5+SW6 recovery at boot. With `0`, SW6 instead disables USB power saving (`dip_switch.c`). |
 
-`age` starts at the timer compare associated with a scan that publishes key changes and ends at the keyboard USB report completion callback. Reading the diagnostics resets `age_avg` and `age_max` for the next interval. Zero values indicate no completed measurements in that interval. These values include scanning, processing and USB delivery up to the callback. Physical key movement to application latency requires a separate measurement. `err` estimates the controller's phase correction. The cumulative `drop=97` and `resync=1` values predate both recordings and do not increase during them; the queue stays at `q=0`.
+## Matrix and pins
 
-SOF On stabilized typical `age` values, but one of 12 active intervals still contains a 2942 µs peak after the 10-second wait. The log does not establish its cause or the number of individual high-latency events.
+ANSI: 4 rows x 15 columns, 60 keys (`NUM_ROWS`, `MATRIX_COLS`, `NUM_KEYS` in
+`config.h`). The VIA definition reports 5 rows (`VIA_PROTOCOL_MATRIX_ROWS`).
 
-### JIS timing headroom
+- Rows: `PB0`, `PB1`, `PB2`, `PB10` (`HHKB_ROW_BITS`).
+- Columns: two analog multiplexers, enabled by `PC6` (columns 0-7) and `PB15`
+  (columns 8-14), with channel address lines `PB12`, `PB13`, `PB14`.
+- Analog front end: `PC14` sensor power, `PC7` op-amp enable, `PC8`
+  discharge, ADC channel 1 (`PA1`).
+- DIP switches: `PA3`-`PA7` and `PC4`, active low (`HHKB_DIP_PINS`).
+- LEDs: `PA8` (blue) and `PA9` (orange) (`LED_PINS`).
 
-JIS scans 69 populated positions instead of ANSI's 60, a 15% increase in measurements. The scanner skips six unpopulated positions in the 5×15 matrix. Processing time also depends on RT, curves, calibration and diagnostic streaming. An ANSI `age` near 949 µs does not specify the scan duration or establish JIS headroom.
+The scanner is timer driven (TIM2) and its hot path lives in RAM
+(`.RamFunc`). Periods come from `update_scan_period()` in `ec/matrix.c`:
+50 Hz (a 10 ms timer with a divide-by-2), 125, 250, 500 and 1000 Hz
+(8, 4, 2, 1 ms). While calibrating at a 1000 Hz target the scan runs at half
+rate (500 Hz). The CPU runs at 32 MHz (`platforms/stm32l072/platform.c`).
+Whether 1000 Hz is actually sustained is not guaranteed: check `[SCAN]` and
+`[RATE]` in the HID console (see [VIA & debug](via-debug.md#scan-diagnostics)).
 
-At 1000 Hz the SOF controller estimates scan-and-publication time, adds `HHKB_SOF_MARGIN_US` (150 µs by default), and clamps the lead to 50–950 µs. Both logs show `lead=950`, the upper limit. Physical JIS validation must check `[SCAN] work_max`, `miss` and `q_full`. Preserving the full 150 µs margin at the maximum 950 µs lead requires work to fit within 800 µs. Increasing `miss` or work exceeding the 1000 µs period indicates insufficient time for the selected settings. These Classic ANSI measurements leave JIS operation at 1000 Hz unverified.
+## Defaults
 
-## Matrix and Peripheral Pinout
+Values at first boot or after an EEPROM erase (`ec/ec_settings.c`,
+`ec/rapid_trigger.c`, `config.h`):
 
-- **Matrix:** 4 rows × 15 columns (ANSI) or up to 5 rows × 15 columns (JIS).
-- **Rows:** `PB0`, `PB1`, `PB2`, `PB10` (`GPIOB` masks `0x001`, `0x002`, `0x004`, `0x400`).
-- **Columns:** Two 74HC4051 analog multiplexers. `PC6` selects U1 (columns 0–7), `PB15` selects U2 (columns 8–14); `PB12`, `PB13`, `PB14` drive channel addresses.
-- **Analog frontend:** `PC14` sensor power, `PC7` op-amp enable, `PC8` C57 capacitor discharge, `PA1` ADC input (`ADC_IN1`).
-- **DIP switches:** `PA3`–`PA7` and `PC4`, active low.
-- **LEDs:** `PA8` and `PA9` (Classic and Hybrid). [VIA](https://www.usevia.app/) assigns Off, Debug heartbeat, Caps Lock, Fn layer, or System 2 independently; by default PA8 indicates Caps Lock, PA9 indicates Fn layer.
+| Setting | Default |
+| --- | --- |
+| Target scan rate | 1000 Hz |
+| ADC oversampling 4x | off (and always bypassed at 1000 Hz) |
+| Actuation point | 75% of range (750 per-mille) |
+| Release hysteresis (RT off) | 0.4 mm nominal (100 per-mille) |
+| Rapid Trigger | off |
+| RT press / release sensitivity | 0.1 mm nominal (25 per-mille each) |
+| RT top dead zone | 50 per-mille (0.2 mm nominal) |
+| RT bottom dead zone | 0.5 mm |
+| Tapping term / quick tap | 220 ms / 150 ms |
+| Permissive hold / tap preferred | on / off |
+| LEDs | PA8 = Caps Lock, PA9 = Fn layer |
+| USB power saving | on |
+| Debug flags | all off |
 
-## Factory Data and Calibration
+"Nominal" millimetres assume 4 mm over the calibrated range, or the travel
+curve's maximum travel when the curve is enabled. While *Use custom
+calibration* is off, RT press/release below 0.4 mm are raised to 0.4 mm
+(`hhkb_get_scan_cfg()`).
 
-Factory classic-mode thresholds are read from the keyboard's EEPROM at startup. A single DMK build preserves individual thresholds when installed across different boards. User calibration stores each real key's baseline and peak in the [compressed EEPROM snapshots](via-debug.md#compressed-eeprom-storage), together with the keymap and VIA settings. Disabling user calibration selects default calibrated ranges without overwriting factory tables.
+## Calibration data
 
-## DIP Switches
+The Hybrid has no factory threshold mapping in this firmware: `ec_settings.c`
+returns no factory baseline (`get_factory_baseline` returns 0 under
+`HHKB_HYBRID`). Without saved calibration every key uses a default baseline of
+800 ADC counts and a peak of baseline + 2370, so run the calibration
+procedure in [VIA & debug](via-debug.md#key-calibration) before relying on
+actuation or Rapid Trigger.
 
-SW1–SW5 are read by firmware but have no hardcoded actions in DMK. SW6 triggers recovery into Bank 1. To select base/Fn layer pairs, use VIA System 1 and System 2 keycodes. Fn + Tab toggles Caps Lock.
+Calibration stores per-key baseline and peak (accepted baseline 20-2000
+counts, peak at most 4095 and more than 150 above baseline) in the
+[compressed EEPROM snapshots](via-debug.md#eeprom-storage).
 
-## Hybrid Only: Transport, Profiles, and Power
+## USB SOF lock
 
-PC13 reads LOW on USB power and HIGH on battery. On battery, DMK sends 6-key HID reports over SPI to the stock nRF module and uses dedicated battery scan rates. On USB, reports default to USB. **BT / USB** switches to the last Bluetooth profile even with USB plugged in. Bluetooth report timing is controlled by the Nordic chip and is independent of matrix scanning.
+`ec/sof_lock.c` uses the CRS SYNC interrupt (which tracks USB SOF) to measure
+the 1 ms frame period and the host's IN-poll phase, then times the scan so a
+published report is armed shortly before the next poll. The lead is the tracked
+worst-case scan work plus `HHKB_SOF_MARGIN_US`, clamped in the source. It can be
+switched off for the current session from VIA (**Scan Rate -> USB SOF phase
+lock**, value ID 61). With `HHKB_SCAN_DIAGNOSTICS`, `[LAT]` shows
+`age_avg`/`age_max` (timer compare of a publishing scan to the USB report
+completion callback), `err`, `lock`, `lead` and `in`.
 
-Four Bluetooth profiles are supported. **BT Select 1–4** selects a bond; **BT Pair 1–4** starts pairing in a chosen slot. **BT Next** cycles through slots. The last selected slot is saved in EEPROM.
+No measurement of this fork's SOF behaviour is recorded in this repository.
+Any measurement made outside this repository is not reproduced here. Verify on your unit with
+the [checklist](../../../../docs/en/tests.md).
 
-The factory nRF is SPI master on PA15/PB3–PB5 (Mode 3, 125 kHz). PB6 requests polling (Attention), PD2 controls module enable. STM32 application lives in Bank 2 starting at `0x08010000`.
+## Power and USB detection
 
-The common [VIA controls](via-debug.md) also configure USB matrix rate, calibration, actuation and hysteresis, Rapid Trigger when compiled in, ADC oversampling, hold-tap timing, and the base modes of both LEDs. Hybrid-specific battery, profile, and PC5 controls are listed below. The Classic factory calibration table must not be assumed to match Hybrid hardware.
+`modules/hybrid/`: `PC13` reads low on USB power and high on battery.
 
-### Hybrid power-off behaviour
+- **USB:** normal operation. With **Power Saving Mode** on (default) and no USB
+  host mounted, or the bus suspended, LEDs go off and the sensor board is
+  powered down (`PC14`, `PC7` low) and scanning stops; scanning resumes when the
+  host returns.
+- **Battery:** there is no output path, so the keyboard stops scanning,
+  releases published keys, blanks the LEDs, shuts down USB and the ADC, and
+  enters STOP (`hybrid_stop.c`). A change of `PC13` to USB power wakes it and
+  resets the MCU (`NVIC_SystemReset`). The power button on `PC5` is not
+  referenced anywhere in the firmware.
+- In STOP the IWDG is refreshed after each LPTIM1 wake-up (about every
+  1.7 s per the comment in `hybrid_stop.c`).
 
-All Hybrid builds use the stock-style OFF implementation: Nordic idle over SPI, STM32 STOP without holding PD2 high, and resume without STM32 reset after ordinary OFF. No additional build flag is required. The earlier MIT/stock comparison builds have been removed from CI. Hybrid ANSI and JIS artifacts include the same implementation, including Type-S.
+Current draw in any of these states has not been measured in this repo.
 
-### Power modes and PC5
+## Hold-tap and layers
 
-- **USB active:** USB output by default. Configured inactivity or BT Sleep can enter sleep. PC5/BT Power can enter USB soft-OFF: the USB device remains enumerated, while matrix scanning, sensor power and normal LEDs are disabled. STM32 keeps the scheduler, USB and SPI alive; the idle request is repeated about every 3 seconds without blocking PC5 polling. Unplugging USB while OFF enters battery STOP. Inserting USB into battery OFF still resets into the USB path.
-- **Battery active:** Bluetooth output. Matrix scanning targets a fixed 11 ms period. Radio report timing is determined by the stock Nordic firmware. See the Bluetooth scan-rate section below.
-- **Sleep:** BT Sleep, the configured PC5 action, or inactivity (default 30 min; 0 disables automatic sleep) enters Nordic-idle sleep on either power source. With automatic sleep enabled, a no-connection notification lasting 60 seconds also enters sleep. DMK releases keys and sends the disconnect/idle SPI exchange, repeating a consumed request at 200 ms intervals while disconnection is unconfirmed (up to six retries; total wait bounded to about 3 seconds), then blanks LEDs and stops regular matrix scans. VIA Wake with matrix enables 1–10 Hz probes (default 1 Hz); off enters ordinary OFF directly. PC5 release after 0.1–2 seconds, an enabled matrix probe, a power-source change or a new Nordic slot-connected notification wakes. Wake requests the last BT profile when Bluetooth output is selected. Holding PC5 2 seconds performs the configured long action without an intermediate wake. The power-off-after-sleep timer offers 0 (never), 1/3/5/10/20/30/40/50/60 min; default 3 min. It enters ordinary OFF only on battery; USB sleep does not automatically enter OFF.
-- **Ordinary OFF:** request Nordic idle and wait for request consumption/disconnection, then battery STOP or USB soft-OFF without raising PD2. Hold PC5 at least about 1 second and release before 10 seconds to resume without STM32 reset; blue indicates readiness. Holding 10 seconds cancels wake: orange for about 3 seconds, wait for release, repeat the Nordic idle exchange and remain OFF. Critical-battery STOP is separate: PC5 is masked and USB wake resets STM32.
+One `HT(hold, tap)` model is used internally; VIA Mod-Tap / Layer-Tap convert
+to it (see [keycodes](../../../../docs/en/keycodes.md#universal-hold-tap)). Four
+layers exist (`DYNAMIC_KEYMAP_MAX_LAYERS 4`): layers 0/1 are system 1 and
+layers 2/3 are system 2. The keycodes **System 1** and **System 2**
+(`0x7E00`, `0x7E01`) switch between them
+(`modules/indicators_system/indicators_system.c`).
 
-Short PC5 presses last 0–0.5 seconds and show the connected profile by default. VIA can assign no action, battery display, sleep, next profile, or last Bluetooth profile/USB toggle. Long presses fire after two seconds and default to OFF; VIA can assign sleep or pairing of the last profile. The guarded OFF wake gesture is fixed.
+## Grave Escape
 
-The SPI protocol and original STOP implementation retain their MIT attribution. The selected ordinary OFF path follows the supplied stock analysis; repeated power-button cycles, Bluetooth reconnection and direct sleep-to-OFF were confirmed by the tester. Wake with matrix affects key probing only, not PC5 behaviour.
-
-### Differences from stock sleep and OFF
-
-On battery, DMK aims to reproduce stock clocks, ADC operation, Nordic idle signalling, PC5 handling and STOP to obtain stock-level consumption. OFF reached 0.21 mA on the tested keyboard. Stock powers off directly; DMK adds optional sleep with matrix wake. With matrix wake disabled, a sleep request enters OFF immediately. With it enabled, sensors are powered only for probes at 1–10 Hz (default 1 Hz), until a key wakes the board or the configured battery sleep-to-OFF timer expires.
-
-Additional VIA settings control inactivity, sleep-to-OFF timing, sleep scan rate, PC5 actions, battery oversampling and LEDs. The critical-battery USB-only wake path remains separate. PC5 handling does not depend on the matrix-wake checkbox. See the [current consumption comparison](../../README.md#hybrid--battery-power).
-
-### Measured battery consumption and thresholds (Hybrid)
-
-The current measurements are published in the README, separately for Classic and Hybrid. They were received on 21 November 2026 and apply to one keyboard; higher sleep probe rates still require hardware measurements.
-
-On battery, Hybrid now uses the stock-style clock tree described by static firmware analysis: HSI16 /4 → PLL ×4 /4 → 4 MHz CPU/AHB/APB, voltage Range 1, and zero Flash wait states. ADC1_IN1 uses synchronous PCLK/4 = 1 MHz, 12-bit single software-triggered conversions, minimum 1.5-cycle sampling time, and **LowPowerAutoPowerOff** (automatic power-down after each conversion). The pre-conversion row settling delay is approximately 25 µs. Oversampling is off by default; the independent battery 4x toggle remains an optional departure from the stock settings.
-
-Battery matrix scanning has a fixed **11 ms target period (about 90.9 Hz)**. Its VIA frequency dropdown and setter have been removed; previously stored battery rates are ignored. This is matrix timing, not the BLE connection interval or a guarantee of report delivery. The USB CPU/ADC clocks, scan-rate options and analog delays retain their existing DMK settings: 32 MHz CPU and 16 MHz ADC. On power-source changes, PLL, Flash latency, ADC mode, TIM2 and tickless SysTick parameters are restored for the selected path.
-
-USB/TinyUSB, CRS, HSI48 and unused analog reference buffers are disabled on battery; cable detection is polled every 100 ms by the USB task. Unlike the analyzed stock busy loop, DMK retains tickless idle/WFI between scans. **LowPowerAutoPowerOff refers to the ADC**, independently of the keyboard inactivity timeout (30 minutes by default, configurable). VIA **Wake with matrix** enables sleep with 1–10 Hz probes (default 1 Hz); when off, sleep requests enter ordinary OFF directly. Both paths request Nordic idle. Sleep keeps the scheduler running between probes; battery OFF enters STOP. Both LEDs are blanked in sleep. Idle indicator checks use 250 ms, active status patterns 50 ms, sleep 1 second. Other interrupts/tasks can wake the CPU sooner.
-
-Battery OFF disables the ADC regulator, TIM2, USB and HSI48, clears matrix/multiplexer outputs and enters STOP. USB soft-OFF keeps USB/CPU/SPI alive while TIM2 scanning and analog sensor outputs are disabled. SWD markers: `hhkb_stop_stage` 1 = preparation, 2 = waiting for button release, 3 = before WFI, 4 = returned from WFI, 5 = timing the button, 6 = resume. `hhkb_stop_wake_count` counts WFI returns. Both are volatile RAM diagnostics.
-
-The [README](../../README.md#scan-rate-and-power) contains the current Classic and Hybrid consumption tables.
-
-The battery display uses discrete hardware thresholds, not a continuous voltage-to-percentage conversion. During the reported supply-voltage sweep:
-
-- **Above-low-battery band (displayed 100%, four orange flashes):** observed from 3.00 down to 2.25 V.
-- **15%, three flashes:** observed from 2.24 down to 2.14 V.
-- **5%, two flashes:** observed from 2.13 down to 2.03 V.
-- **0%, one flash:** observed at 2.02 V; this does not mean immediate power loss.
-- The keyboard was no longer operating at 1.71 V. The exact shutdown voltage was not established.
-
-Thus the observed threshold transitions fall between 2.25–2.24 V, 2.14–2.13 V, and 2.03–2.02 V. These are sample measurements; tolerance and hysteresis were not characterized. Displayed 100% means none of the low-battery thresholds is active, not a fully charged battery. USB power does not charge the batteries.
-
-### Hardware and license notes
-
-The ANSI matrix and SPI protocol follow the supplied [l3tnun/hhkb_hybrid](https://github.com/l3tnun/hhkb_hybrid) research. Its `nrf_spi.c` and `power.c` have MIT headers; only protocol handling and the STOP wake sequence were adapted. See the attribution and full upstream notice in [LICENSE.protocol](../../modules/hybrid/LICENSE.protocol). Factory and patched PFU containers remain outside Git.
-
-JIS coordinates and the Hybrid factory calibration map remain unverified. A successful build does not establish that the keyboard boots, pairs, wakes from STOP, or reaches the expected battery current on real hardware.
-
+`KC_GESC` (`0x7C16` through VIA *Any*; `modules/grave_escape`) sends Escape with
+no modifier. Four toggles (Alt, Ctrl, GUI, Shift) force Escape when that
+modifier is held; otherwise Grave is sent. **Ignore modifier in reports**
+(None, Alt, Ctrl, GUI; value ID 66) suppresses that modifier in the report for
+a GESC press. Settings are stored in EEPROM with the other settings. The
+value `0x7C16` is not defined in this repository's code: it is the VIA/QMK
+`QK_GESC` code, `unverified` here.
