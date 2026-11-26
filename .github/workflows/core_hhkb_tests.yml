@@ -3,7 +3,7 @@ name: Core and HHKB Tests
 on:
   workflow_dispatch:
   push:
-    branches: [main, master, dev]
+    branches: [main, master, dev, nxmk]
     paths:
       - 'dmk_core/**'
       - 'cmake/**'
@@ -16,7 +16,7 @@ on:
       - 'platforms/**'
       - '.github/workflows/core_hhkb_tests.yml'
   pull_request:
-    branches: [main, master, dev]
+    branches: [main, master, dev, nxmk]
     paths:
       - 'dmk_core/**'
       - 'cmake/**'

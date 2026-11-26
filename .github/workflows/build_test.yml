@@ -3,9 +3,9 @@ name: Build Firmware
 # nxmk: only the radio-free HHKB Hybrid (ANSI) image is built.
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master, dev, nxmk ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master, dev, nxmk ]
   workflow_dispatch:
 
 jobs:
