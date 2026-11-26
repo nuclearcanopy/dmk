@@ -31,7 +31,8 @@ _Static_assert(sizeof(vial_storage.data.combos) == 80 &&
 static const uint8_t c_positions[NUM_KEYS][2] = LAYOUT;
 static uint32_t c_image[C_SLOT_BYTES / 4];
 static hhkb_eeprom_cal_t c_cal;
-static bool c_initialized, c_keymap_ready, c_cal_ready, c_pending, c_blocked;
+static bool c_initialized, c_keymap_ready, c_cal_ready, c_pending, c_blocked, c_abandoned;
+static unsigned c_fails;
 static int c_active = -1, c_target = -1, c_copy = -1;
 static unsigned c_stage, c_copy_stage, c_cleanup;
 static uint32_t c_generation, c_flags;
@@ -50,12 +51,23 @@ extern void debug_console_printf(const char *fmt, ...);
 #define HHKB_EEPROM_LOG(...) ((void)0)
 #endif
 #endif
+/* One failed word is retried on each ~2 ms storage poll, so 256 consecutive
+ * failures (one step, no progress) cover >= 512 ms of the poll cadence. Then the
+ * save is abandoned: the target slot's commit word was zeroed before its payload,
+ * so it stays invalid and the previous snapshot remains the active one. */
+#define C_RETRY_MAX 256U
 static void c_write_failed(const char *where) {
     (void)where;
-    if (strcmp(c_status, "Write failed: retrying") != 0) {
-        HHKB_EEPROM_LOG("write failed (%s), retrying", where);
+    if (++c_fails < C_RETRY_MAX) {
+        if (strcmp(c_status, "Write failed: retrying") != 0) {
+            HHKB_EEPROM_LOG("write failed (%s), retrying", where);
+        }
+        c_status = "Write failed: retrying";
+        return;
     }
-    c_status = "Write failed: retrying";
+    c_fails = 0; c_abandoned = true; c_target = c_copy = -1; c_stage = c_copy_stage = 0;
+    c_packing = false; c_status = "Write failed: not saved"; /* c_pending stays: next change retries */
+    HHKB_EEPROM_LOG("write failed (%s), giving up", where);
 }
 static volatile uint32_t *c_phys(unsigned offset) {
     return (volatile uint32_t *)(HHKB_EEPROM_BASE + offset);
@@ -213,14 +225,14 @@ static bool c_cal_equal(const hhkb_eeprom_cal_t *cal) {
 void hhkb_compact_save_cal(const hhkb_eeprom_cal_t *cal) {
     HHKB_STORAGE_LOCK();
     if(!c_cal_ready || !c_cal_equal(cal)) {
-        c_cal=*cal; c_cal_ready=true; c_packing=false; c_pending=true;
+        c_cal=*cal; c_cal_ready=true; c_packing=false; c_pending=true; c_abandoned=false;
         if(!c_blocked) c_status="Pending";
     }
     HHKB_STORAGE_UNLOCK();
 }
 /* Called at the mutation, not only after VIA's deferred save debounce. */
 void vial_keyboard_storage_changed(void) {
-    if(c_packing) { c_packing=false; c_pending=true; }
+    if(c_packing) { c_packing=false; c_pending=true; c_abandoned=false; }
 }
 void vial_keyboard_keymap_load(void) {
     c_init();
@@ -231,7 +243,7 @@ void vial_keyboard_keymap_load(void) {
     } else if(hhkb_compact_legacy_allowed()) legacy_keymap_load();
     c_keymap_ready=true; if(c_active<0) c_pending=true;
 }
-void vial_keyboard_keymap_save(void) { c_packing=false; c_pending=true; if(!c_blocked) c_status="Pending"; }
+void vial_keyboard_keymap_save(void) { c_packing=false; c_pending=true; c_abandoned=false; if(!c_blocked) c_status="Pending"; }
 static uint8_t c_input(size_t i, void *ctx) {
     (void)ctx;
     if(i<sizeof(dynamic_keymap)) {
@@ -304,10 +316,12 @@ static bool c_cleanup_poll(void) {
             (off>=0x1500 && off<0x1500+4*((c_flags>>4)&255));
         if(owned) {
             if(!write_word(c_phys(off),0)) { --c_cleanup; c_write_failed("cleanup"); }
+            else c_fails=0;
             return false;
         }
     }
     if(!write_word(c_phys(0x1708),C_DONE)) { c_write_failed("cleanup done"); return false; }
+    c_fails=0;
     if(!c_pending && c_target<0) c_status="Saved (compressed)";
     return true;
 }
@@ -316,12 +330,12 @@ bool hhkb_compact_reset(void) {
     if(!c_owner_valid()) {
         /* Preserve unknown factory data and let normal enrollment handle blank EEPROM. */
         if(c_flags) { HHKB_EEPROM_LOG("reset blocked: foreign data"); return false; }
-        c_pending=c_packing=false;
+        c_pending=c_packing=c_abandoned=false;
         return true;
     }
     if(!write_word(c_phys(0x1708),C_RESET)) { HHKB_EEPROM_LOG("reset failed: marker"); return false; }
     if(!write_word(c_word(0,4),0) || !write_word(c_word(1,4),0)) { HHKB_EEPROM_LOG("reset failed: slot clear"); return false; }
-    c_active=c_target=-1; c_pending=c_packing=false; c_status="Defaults (compressed)";
+    c_active=c_target=-1; c_pending=c_packing=c_abandoned=false; c_status="Defaults (compressed)";
     HHKB_EEPROM_LOG("reset to defaults");
     return true; /* tombstone remains until the first default snapshot commits */
 }
@@ -331,17 +345,17 @@ bool vial_keyboard_keymap_reset(void) {
     return hhkb_compact_reset() && hhkb_storage_erase_early();
 }
 bool hhkb_compact_busy(void) {
-    if (c_blocked || !c_keymap_ready || !c_cal_ready) return false;
+    if (c_blocked || c_abandoned || !c_keymap_ready || !c_cal_ready) return false;
     return c_pending || c_packing || c_target >= 0 ||
         (c_active >= 0 && (*c_phys(0x1708) == 0 || *c_phys(0x1708) == C_RESET));
 }
 
 void vial_keyboard_keymap_poll(void) {
     c_init();
-    if(c_blocked || !c_keymap_ready || !c_cal_ready) return;
+    if(c_blocked || c_abandoned || !c_keymap_ready || !c_cal_ready) return;
     if(c_active>=0 && *c_phys(0x1708)==C_RESET) {
-        if(!write_word(c_phys(0x1708),0)) c_write_failed("reset clear");
-        c_cleanup=0; return;
+        if(!write_word(c_phys(0x1708),0)) { c_write_failed("reset clear"); return; }
+        c_fails=0; c_cleanup=0; return;
     }
     if(c_active>=0 && !c_cleanup_poll()) return;
     if(c_target<0) {
@@ -369,6 +383,7 @@ void vial_keyboard_keymap_poll(void) {
         else if(c_copy_stage<=SLOT_WORDS) { off=c_copy_stage-1; value=off==3?0:slot(1)[off]; }
         else { off=3; value=SLOT_COMMIT; }
         if(!write_word((volatile uint32_t *)slot(0)+off,value)) { c_write_failed("legacy copy"); return; }
+        c_fails=0;
         if(++c_copy_stage>SLOT_WORDS+1) { c_copy=-1; c_flags|=1; }
         return;
     }
@@ -383,6 +398,7 @@ void vial_keyboard_keymap_poll(void) {
     else if(c_stage==C_SLOT_BYTES/4+1) { off=4; value=SLOT_COMMIT; }
     else { off=c_stage-1; value=off==4?0:c_image[off]; }
     if(!write_word(c_word((unsigned)c_target,off),value)) { c_write_failed("slot"); return; }
+    c_fails=0;
     if(++c_stage==C_SLOT_BYTES/4+2) {
         c_active=c_target; c_target=-1; c_generation=c_image[1]; c_status=c_pending?"Pending":"Saved (compressed)";
         HHKB_EEPROM_LOG("saved slot=%d gen=%lu", c_active, (unsigned long)c_generation);

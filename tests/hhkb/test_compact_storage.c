@@ -14,12 +14,16 @@ vial_storage_t vial_storage;
 static uint32_t memory[1536];
 static int budget=-1;
 static unsigned writes;
+static unsigned attempts, giveups, failures_left;
 static bool inject_write(volatile uint32_t *p,uint32_t v) {
     assert(p>=memory && p<memory+1536);
+    ++attempts;
+    if(failures_left) { --failures_left; return false; }
     if(budget==0) return false;
     if(budget>0) --budget;
     *p=v; ++writes; return true;
 }
+#define HHKB_EEPROM_LOG(...) do { if(strstr(#__VA_ARGS__,"giving up")) ++giveups; } while(0)
 #define HHKB_STORAGE_LOCK() ((void)0)
 #define HHKB_STORAGE_UNLOCK() ((void)0)
 #define HHKB_EEPROM_WRITE inject_write
@@ -45,7 +49,7 @@ static void defaults(void) {
 static void reboot(void) {
     c_initialized=c_keymap_ready=c_cal_ready=c_pending=c_blocked=c_packing=false;
     c_active=c_target=c_copy=-1; c_stage=c_copy_stage=c_cleanup=0;
-    c_generation=c_flags=0; c_status="Not saved";
+    c_generation=c_flags=0; c_abandoned=false; c_fails=0; c_status="Not saved";
     active_slot=target_slot=-1; generation=stage=0; pending=false;
     defaults();
     if(!hhkb_compact_load_cal(&cal) && hhkb_compact_legacy_allowed()) {
@@ -267,5 +271,24 @@ int main(int argc, char **argv) {
         vial_keyboard_keymap_save();poll();reboot();
         for(unsigned i=0;i<4;++i)assert(dynamic_keymap[0][i]==modtaps[(i+pass)%4]);
     }
+    /* Bounded retry: persistent failure gives up once, clears busy, keeps the
+     * old snapshot valid, and the next change starts a fresh save. */
+    fresh();poll();int base=c_active;assert(base>=0 && !hhkb_compact_busy());
+    unsigned old_gen=c_generation;
+    dynamic_keymap[0][0]=0x5151;vial_keyboard_keymap_save();
+    attempts=giveups=0;failures_left=~0U;
+    for(unsigned i=0;i<C_RETRY_MAX+1000;++i) vial_keyboard_keymap_poll();
+    assert(attempts==C_RETRY_MAX && giveups==1);
+    assert(!hhkb_compact_busy() && c_target<0 && !strcmp(c_status,"Write failed: not saved"));
+    assert(c_active==base && c_generation==old_gen);
+    failures_left=0;reboot();assert(dynamic_keymap[0][0]==4 && c_active==base); /* old snapshot intact */
+    dynamic_keymap[0][0]=0x5152;vial_keyboard_keymap_save();assert(hhkb_compact_busy());
+    poll();assert(!hhkb_compact_busy() && c_active==1-base && giveups==1);
+    reboot();assert(dynamic_keymap[0][0]==0x5152);
+    /* Transient failure then success still completes without giving up. */
+    dynamic_keymap[0][0]=0x5153;vial_keyboard_keymap_save();
+    attempts=0;failures_left=C_RETRY_MAX-1;poll();
+    assert(giveups==1 && !hhkb_compact_busy() && !strcmp(c_status,"Saved (compressed)"));
+    reboot();assert(dynamic_keymap[0][0]==0x5153);
     puts("compact EEPROM transactions and early recovery reset passed");
 }

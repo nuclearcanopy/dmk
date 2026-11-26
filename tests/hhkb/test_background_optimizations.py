@@ -31,7 +31,7 @@ typedef unsigned TickType_t;
 #define C_RESET 42
 static bool s_reset_pending,s_eeprom_dirty,s_settings_dirty,c_pending,c_packing;
 static int c_target=-1,c_active=-1;
-static bool c_blocked,c_keymap_ready=true,c_cal_ready=true;
+static bool c_abandoned,c_blocked,c_keymap_ready=true,c_cal_ready=true;
 static uint32_t owner=1;
 static uint32_t *c_phys(unsigned off){(void)off;return &owner;}
 '''
@@ -50,6 +50,7 @@ int main(void){
  c_active=0;owner=0;assert(vial_eeprom_poll_interval()==2);
  owner=C_RESET;assert(vial_eeprom_poll_interval()==2);
  owner=1;assert(vial_eeprom_poll_interval()==1000);
+ c_pending=true;c_abandoned=true;assert(vial_eeprom_poll_interval()==1000);c_abandoned=false;
  c_pending=true;c_blocked=true;assert(vial_eeprom_poll_interval()==1000);
 }
 '''
