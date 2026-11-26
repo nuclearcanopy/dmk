@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Modifications Copyright (C) 2026 nuclearcanopy, licensed AGPL-3.0-or-later.
 // Reduced to the USB-wake-only battery STOP. Adapted from l3tnun's MIT-licensed hhkb_hybrid/power.c STOP wake sequence.
 // The upstream copyright and license are in LICENSE.protocol.
 #include "hybrid.h"

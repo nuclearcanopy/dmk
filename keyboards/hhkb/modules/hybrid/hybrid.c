@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Modifications Copyright (C) 2026 nuclearcanopy, licensed AGPL-3.0-or-later.
 // nxmk: radio-free Hybrid support. The former Nordic SPI link (adapted from
 // l3tnun's hhkb_hybrid nrf_spi.c / hhkb_hybrid.c; see LICENSE.protocol) has
 // been removed. Only power-source detection and battery soft-OFF remain.

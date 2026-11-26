@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Size/vector gates for the HHKB L072 Bank 2 image. Usage: check_image.sh [build-dir]
 set -euo pipefail
 D="${1:-build/hhkb-script}"; N=nxmk_hhkb_stm32l072

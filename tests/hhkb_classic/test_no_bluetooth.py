@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """nxmk: the Hybrid image must not build or expose any Bluetooth/radio code."""
 import json
 import re
