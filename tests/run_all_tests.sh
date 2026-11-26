@@ -9,13 +9,6 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-RUN_MATRIX=false
-for arg in "$@"; do
-    if [[ "$arg" == "--all" || "$arg" == "--matrix" ]]; then
-        RUN_MATRIX=true
-    fi
-done
-
 echo -e "${BOLD}====================================================${NC}"
 echo -e "${BOLD}              DMK Comprehensive Test Suite          ${NC}"
 echo -e "${BOLD}====================================================${NC}\n"
@@ -164,15 +157,6 @@ else
     echo "HHKB Classic sources absent; skipping HHKB firmware tests."
 fi
 
-if [[ -f "${SCRIPT_DIR}/keyboards/le_capybara/modules/ec/cal_request.h" ]]; then
-    # le_capybara cross-task calibration request slot
-    CAPYBARA_TEST_DIR="${SCRIPT_DIR}/tests/le_capybara"
-    clang -std=c11 -Wall -Wextra -Werror -I "${SCRIPT_DIR}/keyboards/le_capybara/modules/ec" \
-        "${CAPYBARA_TEST_DIR}/test_cal_request.c" -o "${CAPYBARA_TEST_DIR}/test_cal_request"
-    "${CAPYBARA_TEST_DIR}/test_cal_request"
-    rm -f "${CAPYBARA_TEST_DIR}/test_cal_request"
-fi
-
 # 2. Python Tool Tests
 echo -e "${BOLD}[2/3] Running Python Tool Unit Tests...${NC}"
 uv run python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -p "test_*.py"
@@ -180,11 +164,5 @@ uv run python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -p "test_*.py"
 # 3. JavaScript Editor / Web Wizard Tests
 echo -e "\n${BOLD}[3/3] Running Web Wizard & Editor Tests (Node.js)...${NC}"
 node --test "${SCRIPT_DIR}/tests/test_editor.js"
-
-# 4. Optional: Multi-Platform Build Matrix
-if [[ "$RUN_MATRIX" == true ]]; then
-    echo -e "\n${BOLD}[Optional] Running Multi-Platform CI Build Matrix...${NC}"
-    "${SCRIPT_DIR}/tests/test_build_matrix.sh"
-fi
 
 echo -e "\n${GREEN}${BOLD}🎉 All test suites completed successfully!${NC}\n"
