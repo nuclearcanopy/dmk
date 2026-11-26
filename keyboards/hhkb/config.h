@@ -56,6 +56,12 @@
 #ifndef HHKB_SOF_MARGIN_US
 #define HHKB_SOF_MARGIN_US 150
 #endif
+// Wake the host from USB suspend on a key press while power saving has cut
+// sensor power (low-duty sensor poll + remote wakeup). Off until the idle
+// current is measured on hardware.
+#ifndef HHKB_SUSPEND_WAKE
+#define HHKB_SUSPEND_WAKE 0
+#endif
 #ifndef HHKB_SCAN_DIAGNOSTICS
 #define HHKB_SCAN_DIAGNOSTICS 1
 #endif

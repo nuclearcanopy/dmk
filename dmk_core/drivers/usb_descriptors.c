@@ -323,7 +323,12 @@ void tud_umount_cb(void) {
 
 // Invoked when device is suspended
 void tud_suspend_cb(bool remote_wakeup_en) {
+#if defined(HHKB_SUSPEND_WAKE) && HHKB_SUSPEND_WAKE
+    extern void hhkb_suspend_wake_report(bool remote_wakeup_en);
+    hhkb_suspend_wake_report(remote_wakeup_en);
+#else
     (void)remote_wakeup_en;
+#endif
     led_suspend();
     rgb_suspend();
 }

@@ -7,6 +7,9 @@
 #include "config.h"
 #include "tusb.h"
 #include "sof_lock.h"
+#if HHKB_SUSPEND_WAKE
+#include "suspend_wake.h"
+#endif
 #ifdef HHKB_HYBRID
 #include "hybrid.h"
 #endif
@@ -117,6 +120,12 @@ static void publish_released_matrix(matrix_row_t published_state[MATRIX_ROWS]) {
 }
 #endif
 
+#if HHKB_SUSPEND_WAKE
+void hhkb_suspend_wake_report(bool remote_wakeup_en) {
+    hhkb_suspend_wake_note(remote_wakeup_en);
+}
+#endif
+
 void matrix_task(void *pvParameters) {
     (void)pvParameters;
 
@@ -147,6 +156,10 @@ void matrix_task(void *pvParameters) {
 #endif
     matrix_row_t published_state[MATRIX_ROWS] = {0};
     bool sensor_power_down = false;
+#if HHKB_SUSPEND_WAKE
+    bool wake_armed = false;
+    matrix_row_t wake_prev[MATRIX_ROWS] = {0};
+#endif
 #ifdef HHKB_HYBRID
     hhkb_hybrid_init();
 #endif
@@ -182,6 +195,27 @@ void matrix_task(void *pvParameters) {
                 GPIOC->BRR = (1U << 14) | (1U << 7);
                 sensor_power_down = true;
             }
+#if HHKB_SUSPEND_WAKE
+            if (hhkb_suspend_wake_should_poll(true) && !hhkb_is_calibrating()) {
+                // Entering a poll window: remember keys already down.
+                if (!wake_armed) {
+                    for (uint8_t r = 0; r < MATRIX_ROWS; ++r) wake_prev[r] = s_matrix_state[r];
+                    wake_armed = true;
+                }
+                GPIOC->BSRR = (1U << 14) | (1U << 7);
+                vTaskDelay(pdMS_TO_TICKS(HHKB_SUSPEND_WAKE_SETTLE_MS));
+                hhkb_matrix_scan_raw(s_matrix_state);
+                GPIOC->BRR = (1U << 14) | (1U << 7);
+                if (hhkb_suspend_wake_fire(
+                        hhkb_suspend_wake_edge(s_matrix_state, wake_prev, MATRIX_ROWS))) {
+                    // Give the host time to resume before polling again.
+                    vTaskDelay(pdMS_TO_TICKS(100));
+                }
+                vTaskDelay(pdMS_TO_TICKS(HHKB_SUSPEND_WAKE_PERIOD_MS));
+                continue;
+            }
+            wake_armed = false;
+#endif
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         } else if (sensor_power_down) {
