@@ -240,7 +240,6 @@ Old EEPROM HT records and the short-lived dev modifier-tap records remain readab
 ## MIDI Keycodes and Helper Macros
 
 > [!NOTE]
-> For complete guides on MIDI setup, Vial CC integration, and hardware MIDI Jack interfaces, see the [MIDI Documentation](midi.md).
 
 | Keycode Symbol                                        | Short Name / Alias      | Description                                           | Code / Format         |
 | ----------------------------------------------------- | ----------------------- | ----------------------------------------------------- | --------------------- |
