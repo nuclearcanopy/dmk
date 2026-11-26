@@ -88,9 +88,8 @@ means the key was not pressed through its travel (typical travel is about 2370 c
 `ec_settings.c:19`), so the range check `peak > base+150` is satisfied by a *drifting
 resting signal* alone: with a base 276 the "pressed" threshold is 426, which the settled
 resting value (553) already exceeds. The press detector (`:809-814`) therefore latches
-every key as "down" and "calibrated" at rest without any press. That is consistent with
-`peak == settled value` in the report (peak 553 = resting level): the peak is the resting
-level, not a real key travel.
+every key as "down" and "calibrated" at rest without any press. If the reported peak 553 is the resting level (inference, unconfirmed), the key was never really
+pressed through travel and this is exactly the failure.
 
 ## 4. 500 ms save delay vs calibration
 
@@ -119,11 +118,11 @@ level, not a real key travel.
 
 | # | Hypothesis | Status | Confirming measurement |
 |---|---|---|---|
-| 1 | Raw resting level depends on scan interval; calibration runs at 2 ms (`matrix.c:41`) but normal operation at 1 ms, so the base is measured in a different regime | code-supported (mechanism), speculative (magnitude) | At 1 kHz, VIA 24 (`DEBUG_FLAG_RATE`) and 19 (`DEBUG_FLAG_TOPRE`) on; read `[EC] ... raw=` (`ec_settings.c:703`, every 20 ms, `classic_matrix.c:253-259`) at rest before start, during the capture window and after finish. Repeat at rate 3 (2 kHz? `period_us[3]=2000`, no divider change) and rate 2: the sag should be absent there. A level that jumps at the start/finish boundary confirms |
+| 1 | Raw resting level depends on scan interval; calibration runs at 2 ms (`matrix.c:41`) but normal operation at 1 ms, so the base is measured in a different regime | code-supported (mechanism), speculative (magnitude) | At 1 kHz, VIA 24 (`DEBUG_FLAG_RATE`) and 19 (`DEBUG_FLAG_TOPRE`) on; read `[EC] ... raw=` (`ec_settings.c:703`, every 20 ms, `classic_matrix.c:253-259`) at rest before start, during the capture window and after finish. Repeat at rate 3 (`period_us[3]` = 2000 µs, no divider change, `matrix.c:34`) and rate 2: the sag should be absent there. A level that jumps at the start/finish boundary confirms |
 | 2 | Averaging includes a settle transient after start (no discard window) | code-supported, speculative | Same `[EC]` raw trace, or fire VIA 25 (`DEBUG_FLAG_CAL`) and compare the `base=` printed at the first press of each key (`ec_settings.c:822-824`) with `raw=` at rest 1 s later. A repeat with the keyboard idle for 2 s then start vs. start immediately after USB traffic separates settle from regime |
 | 3 | Sensor-board/OpAmp power restore after sleep (10 ms wait only, `matrix.c:187-197`) or other analog warm-up | speculative | Start calibration immediately after USB resume, vs. 10 s after |
 | 4 | Oversampling toggle/ADC re-enable within the capture window (`classic_matrix.c:171-196`) | speculative (low) | VIA 18 readback; does the sag disappear with oversampling off and rate 4? |
-| 5 | Save in flight at start stalls flash fetch (`ec_settings.c:195-266`) | speculative (low) | Enable VIA 29? No: `DEBUG_FLAG_EEPROM` (0x20) logs `[EEPROM] settings saved`; correlate its timestamp with the start request. Skip the 500 ms wait before start: sag unchanged ⇒ rule out |
+| 5 | Save in flight at start stalls flash fetch (`ec_settings.c:195-266`) | speculative (low) | Enable `DEBUG_FLAG_EEPROM` (0x20) and correlate its `[EEPROM] settings saved`; correlate its timestamp with the start request. Skip the 500 ms wait before start: sag unchanged ⇒ rule out |
 
 The first raw trace to take: record raw for one key at rest across `start → +100 ms → finish → +1 s`.
 There is no direct raw-sample stream during capture other than `[EC] raw=` at 50 Hz (20 ms
