@@ -61,6 +61,31 @@
 #define HHKB_SCAN_DIAGNOSTICS 1
 #endif
 
+/*
+ * Idle slow-scan (compile-time only; not exposed through VIA settings).
+ * After HHKB_IDLE_TIMEOUT_S seconds with no key activity the matrix task scans
+ * once every HHKB_IDLE_SLOW_SCAN_PERIOD_MS instead of at the configured rate.
+ * The first press seen by a slow scan restores the full rate at once. USB stays
+ * enumerated; no suspend or remote wakeup is involved. Calibration blocks it.
+ * Trade-off, by design: at period P a press shorter than P can be missed
+ * entirely, and the first press can be delayed by up to P. At the default
+ * 50 ms a 50-100 ms tap is expected to be seen, a faster flick may not be.
+ * Period must be a multiple of 10 ms (the slow timer tick). Defaults to off.
+ */
+#ifndef HHKB_IDLE_SLOW_SCAN
+#define HHKB_IDLE_SLOW_SCAN 0
+#endif
+#ifndef HHKB_IDLE_SLOW_SCAN_PERIOD_MS
+#define HHKB_IDLE_SLOW_SCAN_PERIOD_MS 50
+#endif
+#ifndef HHKB_IDLE_TIMEOUT_S
+#define HHKB_IDLE_TIMEOUT_S 180
+#endif
+#if HHKB_IDLE_SLOW_SCAN_PERIOD_MS < 10 || HHKB_IDLE_SLOW_SCAN_PERIOD_MS > 2550 || \
+    HHKB_IDLE_SLOW_SCAN_PERIOD_MS % 10 != 0
+#error "HHKB_IDLE_SLOW_SCAN_PERIOD_MS must be a multiple of 10 in 10..2550"
+#endif
+
 /* --- Matrix Geometry --- */
 #define MATRIX_ROWS 4
 #define NUM_ROWS 4
