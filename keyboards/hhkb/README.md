@@ -5,8 +5,7 @@ STM32L072 controller. It is a derivative of [DMK](https://github.com/aroum/dmk)
 and is licensed AGPL-3.0-or-later (see [NOTICE.md](../../NOTICE.md)).
 
 - **Hardware:** HHKB Hybrid Type-S, ANSI, STM32L072 (Bank 2 at `0x08010000`).
-  `CMakeLists.txt` rejects any other model selector unless
-  `NXMK_ALLOW_UPSTREAM_TARGETS` is set; that override is unsupported.
+  `CMakeLists.txt` rejects any other model selector.
 - **Transport:** USB only. There is no radio code in the image: on battery
   power the keyboard has no output path and goes to a low-power STOP state until
   USB power returns (see [Config](docs/en/config.md#power-and-usb-detection)).

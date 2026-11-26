@@ -42,7 +42,7 @@ class NoBluetoothTest(unittest.TestCase):
 
     def test_hybrid_only_hhkb_target(self):
         cmake = (ROOT / 'CMakeLists.txt').read_text()
-        self.assertIn('NXMK_ALLOW_UPSTREAM_TARGETS', cmake)
+        self.assertNotIn('NXMK_ALLOW_UPSTREAM_TARGETS', cmake)
         self.assertIn('nxmk only builds', cmake)
 
 

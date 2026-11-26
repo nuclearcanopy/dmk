@@ -3,20 +3,19 @@
 HHKB Flasher CLI (Open-Source Firmware Updater for Happy Hacking Keyboard)
 ========================================================================
 
-Communicates directly with HHKB Classic and Hybrid via USB Raw HID
+Communicates directly with the HHKB Hybrid (ANSI) via USB Raw HID
 (Vendor ID: 0x04FE, UsagePage: 0xFF00, Usage: 0x01) to read device info
 and flash firmware into STM32L072 Bank 2 (0x08010000).
 
 Supports:
-- Flashing Classic and Hybrid .hfb containers via the PFU E0–E3 protocol.
-- Flashing raw .bin firmware (64 KB) by packaging it on the fly into .hfb.
+- Flashing Hybrid ANSI .hfb containers (see patch_hybrid_hfb.py) via the PFU E0–E3 protocol.
 - Bypassing official PFU version downgrade restrictions.
 - Local CRC and model compatibility checks before starting an update.
 
 Protocol Notes (from tmk research & reverse engineering):
 - Cmd 0x02: Read ID & Version (response: 55 55 02 00 00 39 [data...])
 - Cmd 0xE0: Enter Firmup Mode
-- Cmd 0xE1: Firmup Start (Length: 65,570 [22 00 01 00], CRC16, erase Bank 2)
+- Cmd 0xE1: Firmup Start (container length, outer CRC16, erase Bank 2)
 - Cmd 0xE2: Send chunk (Header: E2 00 <len> <seq_lo> <seq_hi> [payload])
 - Cmd 0xE3: Firmup End (device verification/reboot; response status unverified)
 """
@@ -27,7 +26,7 @@ import re
 import sys
 import time
 
-from make_hfb import CLASSIC_VERSIONS, parse_version_bytes
+from patch_hybrid_hfb import compute_crc16_mcrf4xx
 
 try:
     import hid
@@ -47,9 +46,8 @@ VIA_REPORT_SIZE = 32
 VIA_CMD_GET_PROTOCOL_VERSION = 0x01
 
 REPORT_SIZE = 64
-CLASSIC_HFB_SIZE = 65570
 HYBRID_HFB_SIZE = 282672
-HYBRID_MODELS = {"AHUX01", "AHJX01"}
+HYBRID_MODEL = "AHUX01"
 STM32_END = 4 + 65536
 CHUNK_PAYLOAD_SIZE = 57  # 7-byte header plus 57 data bytes fills a 64-byte HID report
 FIRMUP_REENUMERATION_DELAY_SEC = 10
@@ -63,41 +61,9 @@ CMD_FIRMUP_END = 0xE3
 REQ_HEADER = bytes([0xAA, 0xAA])
 RESP_HEADER = bytes([0x55, 0x55])
 
-def compute_crc16_mcrf4xx(data: bytes) -> int:
-    """Computes CRC-16/MCRF4XX (poly 0x1021 reflected -> 0x8408, init 0xFFFF, no final XOR)."""
-    crc = 0xFFFF
-    for b in data:
-        cur = (crc ^ b) & 0xFF
-        for _ in range(8):
-            if cur & 1:
-                cur = (cur >> 1) ^ 0x8408
-            else:
-                cur >>= 1
-        crc = (crc >> 8) ^ cur
-    return crc
-
-def wrap_binary_to_hfb(raw_bin: bytes, model: str = "AHHX01", version_bytes: bytes = bytes([0x0A, 0x04, 0x05, 0x00])) -> bytes:
-    """Wraps raw 64 KB binary into standard 65,570-byte .hfb container."""
-    if len(raw_bin) > 65536:
-        raise ValueError(f"Firmware exceeds 64 KB ({len(raw_bin)} bytes)")
-    padded = raw_bin + b"\xFF" * (65536 - len(raw_bin))
-
-    inner_tag = compute_crc16_mcrf4xx(padded).to_bytes(2, "little")
-    model_bytes = model.encode('ascii')[:6].ljust(6, b'\x00')
-    postfix = (b"\xFF" * 14) + model_bytes + version_bytes + (b"\xFF" * 6)
-
-    body = inner_tag + padded + postfix
-    outer_crc = compute_crc16_mcrf4xx(body).to_bytes(2, "little")
-    return outer_crc + body
-
-# Match a complete hardware family, including colour/legend and C/C1 revisions.
-# Classic Type-S remains separate from Classic; 800/820 distinguish ANSI/JIS.
+# Match the complete hardware family, including colour/legend and C/C1 revisions.
 MODEL_PATTERNS = {
-    "AHHX01": r"PD-KB401[BW]N?",
-    "AHHS01": r"PD-KB401[BWY]N?SC[0-9]*",
-    "AHKS01": r"PD-KB421[BWY]N?SC[0-9]*",
     "AHUX01": r"PD-KB800[BWY]N?(?:S(?:C[0-9]*)?)?",
-    "AHJX01": r"PD-KB820[BWY]N?(?:S(?:C[0-9]*)?)?",
 }
 
 
@@ -112,14 +78,12 @@ def device_model(type_number: str):
 
 def validate_container(data: bytes, expected_model=None, *, check_crc=True, check_model=True):
     """Validate the complete HFB before sending any update command."""
-    if len(data) not in (CLASSIC_HFB_SIZE, HYBRID_HFB_SIZE):
-        raise ValueError("Expected a 65,570-byte Classic or 282,672-byte Hybrid HFB")
+    if len(data) != HYBRID_HFB_SIZE:
+        raise ValueError("Expected a 282,672-byte Hybrid ANSI HFB")
     model = data[-16:-10].decode("ascii", errors="replace")
-    hybrid = len(data) == HYBRID_HFB_SIZE
-    if hybrid != (model in HYBRID_MODELS) or (expected_model is not None and
-            hybrid != (expected_model in HYBRID_MODELS)):
-        raise ValueError("HFB size, container model and device family must agree")
-    if hybrid and expected_model != model:
+    if model != HYBRID_MODEL:
+        raise ValueError("HFB size and container model must be a Hybrid ANSI update")
+    if expected_model != model:
         raise ValueError(f"Hybrid HFB model {model!r} does not match keyboard {expected_model!r}")
     if check_crc:
         outer = int.from_bytes(data[:2], "little")
@@ -153,7 +117,7 @@ def find_hhkb_device(product_id=None):
         if d.get("usage_page") == PFU_USAGE_PAGE and d.get("usage") == PFU_USAGE:
             return d
     # The hidapi libusb backend reports zero usage values for all interfaces.
-    # On the Classic, the PFU vendor interface is interface 2.
+    # The PFU vendor interface is interface 2.
     for d in matches:
         if d.get("usage_page") == 0 and d.get("interface_number") == 2:
             return d
@@ -314,14 +278,13 @@ class HHKBDevice:
         Execute authentic firmware update sequence:
         0xE0 -> 0xE1 (container size and CRC) -> 0xE2 (send chunks) -> 0xE3
         """
-        if len(hfb_container) not in (CLASSIC_HFB_SIZE, HYBRID_HFB_SIZE):
+        if len(hfb_container) != HYBRID_HFB_SIZE:
             raise ValueError(f"Unsupported HFB size: {len(hfb_container)} bytes")
-        hybrid = len(hfb_container) == HYBRID_HFB_SIZE
 
         def require_ack(response, command, stage):
             if not response.startswith(RESP_HEADER + bytes([command])):
                 raise RuntimeError(f"{stage}: unexpected reply {response[:6].hex(' ')}")
-            if hybrid and (len(response) < 4 or response[3] != 0):
+            if len(response) < 4 or response[3] != 0:
                 raise RuntimeError(f"{stage}: device rejected command ({response[:6].hex(' ')})")
 
         outer_crc_bytes = hfb_container[0:2]
@@ -336,8 +299,7 @@ class HHKBDevice:
         self.reconnect()
 
         # 2. Cmd E1: Firmup Start
-        # Format matching tmk capture: e1 00 08 22 00 01 00 <CRC_LSB> <CRC_MSB> 00 00
-        # 0x00010022 = 65,570 in little-endian (22 00 01 00)
+        # Format matching tmk capture: e1 00 08 <size, 4 bytes LE> <CRC_LSB> <CRC_MSB> 00 00
         size_bytes = len(hfb_container).to_bytes(4, "little")
         req_e1 = REQ_HEADER + bytes([CMD_FIRMUP_START, 0x00, 0x08]) + size_bytes + outer_crc_bytes + bytes([0x00, 0x00])
         self.send_report(req_e1)
@@ -365,11 +327,10 @@ class HHKBDevice:
             self.send_report(packet)
 
             stage = f"E2 chunk {seq} at HFB offset 0x{offset + 2:X}"
-            if hybrid:
-                if offset + 2 >= STM32_END:
-                    stage += " (Nordic)"
-                elif offset + 2 + chunk_len > STM32_END:
-                    stage += " (STM32/Nordic boundary)"
+            if offset + 2 >= STM32_END:
+                stage += " (Nordic)"
+            elif offset + 2 + chunk_len > STM32_END:
+                stage += " (STM32/Nordic boundary)"
             try:
                 resp = self.read_report(timeout_ms=3000)
             except TimeoutError as exc:
@@ -404,15 +365,14 @@ def print_progress(current, total):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="PFU HID flasher for HHKB Classic and Hybrid (ANSI, JIS, Type-S)"
+        description="PFU HID flasher for the HHKB Hybrid (ANSI, Type-S)"
     )
-    parser.add_argument("firmware", nargs="?", help="Path to .bin or .hfb firmware file to flash")
+    parser.add_argument("firmware", nargs="?", help="Path to the Hybrid ANSI .hfb to flash")
     parser.add_argument("--info", action="store_true", help="Read device information only (no flashing)")
     parser.add_argument("--force", action="store_true", help="Bypass Bank 2 reset-vector check")
     parser.add_argument("--skip-crc", action="store_true", help="Skip both HFB CRC checks")
     parser.add_argument("--skip-model-check", action="store_true", help="Skip HFB/device model check")
     parser.add_argument("--skip-verify", action="store_true", help="Skip post-flash DMK VID/PID and VIA check")
-    parser.add_argument("--model", choices=CLASSIC_VERSIONS, help="Model ID to use when wrapping a raw .bin")
     args = parser.parse_args()
 
     print("=== HHKB Open Flasher CLI ===")
@@ -446,21 +406,10 @@ def main():
             data = f.read()
 
         expected_model = device_model(info['type_number'])
-        if len(data) in (CLASSIC_HFB_SIZE, HYBRID_HFB_SIZE):
-            hfb_container = data
-            raw_payload = data[4:STM32_END]
-        elif 8 <= len(data) <= 65536:
-            if expected_model in HYBRID_MODELS:
-                raise ValueError("Hybrid requires a complete model-matched HFB; use the Hybrid packer first")
-            print("Wrapping raw binary into .hfb container...")
-            model = args.model or expected_model
-            if model is None:
-                raise ValueError("Unknown keyboard model: specify --model for a raw binary")
-            version = parse_version_bytes(CLASSIC_VERSIONS[model])
-            hfb_container = wrap_binary_to_hfb(data, model=model, version_bytes=version)
-            raw_payload = hfb_container[4:4+65536]
-        else:
-            raise ValueError(f"Invalid file size: {len(data)} bytes")
+        if len(data) != HYBRID_HFB_SIZE:
+            raise ValueError("Expected a complete 282,672-byte Hybrid ANSI HFB; build one with patch_hybrid_hfb.py")
+        hfb_container = data
+        raw_payload = data[4:STM32_END]
 
         model = validate_container(hfb_container, expected_model, check_crc=not args.skip_crc,
                                    check_model=not args.skip_model_check)

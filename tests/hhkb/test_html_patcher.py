@@ -10,10 +10,10 @@ from unittest.mock import patch as mock_patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/hhkb"))
-from patch_hybrid_hfb import assemble, bank_payload, patch, STOCK_TEMPLATES
+import patch_hybrid_hfb
+from patch_hybrid_hfb import assemble, bank_payload, patch
 
-VERSIONS = {"AHHX01": [10,4,2,9], "AHHS01": [10,8,0,3],
-            "AHKS01": [10,9,0,4], "AHUX01": [10,0,4,8], "AHJX01": [10,2,4,9]}
+STOCK_VERSION = [10, 0, 4, 8]
 
 
 def application(model):
@@ -21,8 +21,7 @@ def application(model):
 
 
 def container(model, app=None, version=None):
-    size = 282672 if model in ('AHUX01', 'AHJX01') else 65570
-    tail = b'\xff' * (size - 65540 - 16) + model.encode() + bytes(version or VERSIONS[model]) + b'\xff' * 6
+    tail = b'\xff' * (282672 - 65540 - 16) + model.encode() + bytes(version or STOCK_VERSION) + b'\xff' * 6
     return assemble(bank_payload(app or application(model)), tail)
 
 
@@ -50,24 +49,22 @@ vm.runInContext('(async()=>{'+BODY+'})()',context).then(()=>console.log('OK')).c
         return subprocess.run(['node'], input=harness, text=True, capture_output=True, check=True).stdout
 
     def test_browser_matches_python_and_preserves_radio(self):
-        for model in ('AHUX01', 'AHJX01'):
-            stock = container(model)
-            app = application(model) + b'new application'
-            tail = bytearray(stock[65540:])
-            tail[-10:-6] = bytes([10, 0 if model == 'AHUX01' else 2, 5, 0])
-            expected = assemble(bank_payload(app), bytes(tail))
-            layout = 'ansi' if model == 'AHUX01' else 'jis'
-            with mock_patch.dict(STOCK_TEMPLATES, {layout: ('test.hfb', hashlib.sha256(stock).hexdigest())}):
-                self.assertEqual(patch(stock, app, layout=layout), expected)
-            result = self.run_js('''
+        stock = container('AHUX01')
+        app = application('AHUX01') + b'new application'
+        tail = bytearray(stock[65540:])
+        tail[-10:-6] = bytes([10, 0, 5, 0])
+        expected = assemble(bank_payload(app), bytes(tail))
+        with mock_patch.object(patch_hybrid_hfb, 'STOCK_SHA256', hashlib.sha256(stock).hexdigest()):
+            self.assertEqual(patch(stock, app), expected)
+        result = self.run_js('''
 stockHashes[model]=hash;
 const output=await patchFirmware(Uint8Array.from(stock),Uint8Array.from(app));
-console.log(BufferNotAvailable=Array.from(output,x=>x.toString(16).padStart(2,'0')).join(''));
-'''.replace('BufferNotAvailable=', ''), model=model, hash=hashlib.sha256(stock).hexdigest(), stock=list(stock), app=list(app))
-            actual = bytes.fromhex(result.splitlines()[0])
-            self.assertEqual(actual, expected)
-            self.assertEqual(actual[65540:-10], stock[65540:-10])
-            self.assertEqual(actual[-10:-6], bytes([10, 0 if model == 'AHUX01' else 2, 5, 0]))
+console.log(Array.from(output,x=>x.toString(16).padStart(2,'0')).join(''));
+''', model='AHUX01', hash=hashlib.sha256(stock).hexdigest(), stock=list(stock), app=list(app))
+        actual = bytes.fromhex(result.splitlines()[0])
+        self.assertEqual(actual, expected)
+        self.assertEqual(actual[65540:-10], stock[65540:-10])
+        self.assertEqual(actual[-10:-6], bytes([10, 0, 5, 0]))
 
     def test_patch_rejects_unsafe_inputs(self):
         stock = container('AHUX01')
@@ -76,9 +73,9 @@ async function rejects(fn){let rejected=false;try{await fn()}catch(e){rejected=t
 const original=Uint8Array.from(stock);
 await rejects(()=>patchFirmware(original,Uint8Array.from(app))); // wrong official SHA
 stockHashes.AHUX01=hash;
-await rejects(()=>patchFirmware(original,Uint8Array.from(jis)));
+await rejects(()=>patchFirmware(original,Uint8Array.from(foreignapp)));
 await rejects(()=>patchFirmware(original,Uint8Array.from(legacy)));
-await rejects(()=>patchFirmware(Uint8Array.from(classic),Uint8Array.from(app)));
+await rejects(()=>patchFirmware(Uint8Array.from(foreign),Uint8Array.from(app)));
 stockHashes.AHUX01=otherHash;
 await rejects(()=>patchFirmware(Uint8Array.from(other),Uint8Array.from(app))); // unsupported PFU version
 const corrupt=original.slice();corrupt[80]^=1;
@@ -86,15 +83,15 @@ await rejects(()=>patchFirmware(corrupt,Uint8Array.from(app)));
 '''
         other = container('AHUX01', version=[10,0,4,7])
         self.run_js(body, stock=list(stock), hash=hashlib.sha256(stock).hexdigest(),
-                    app=list(application('AHUX01')), jis=list(application('AHJX01')),
+                    app=list(application('AHUX01')), foreignapp=list(application('AHJX01')),
                     legacy=list(struct.pack('<II',0x20005000,0x08010009)+bytes(40)),
-                    classic=list(container('AHHX01')), other=list(other), otherHash=hashlib.sha256(other).hexdigest())
+                    foreign=list(container('AHHX01')), other=list(other), otherHash=hashlib.sha256(other).hexdigest())
 
     def test_embedded_model_must_match_container(self):
         self.run_js('''
 for(const file of files){let failed=false;try{validate(Uint8Array.from(file))}catch(e){failed=true}if(!failed)throw Error('accepted model mismatch')}
 ''', files=[list(container('AHUX01', application('AHJX01'))),
-            list(container('AHHS01', application('AHHX01')))])
+            list(container('AHHS01', application('AHUX01')))])
 
     def test_all_target_families_match_python_and_reject_cross_flashes(self):
         from .hhkb_model_cases import model_cases, MODELS
@@ -113,18 +110,18 @@ for(const [number,expected] of Object.entries(cases)){
 ''', cases=model_cases(), expectedModels=list(MODELS))
 
     def test_original_flash_images_and_exact_device_variants(self):
-        legacy = container('AHHX01', struct.pack('<II',0x20005000,0x08010009)+bytes(40))
+        legacy = container('AHUX01', struct.pack('<II',0x20005000,0x08010009)+bytes(40))
         self.run_js('''
 const data=Uint8Array.from(legacy);
 let rejected=false;try{await verifyFlashImage(data)}catch(e){rejected=e.message.includes('legacy')}
 if(!rejected)throw Error('unidentified image accepted');
-officialHashes.AHHX01=hash;
-if(await verifyFlashImage(data)!=='AHHX01')throw Error('recognized stock rejected');
-const pairs=[['AHHX01','PD-KB401WSC'],['AHHS01','PD-KB401W'],['AHKS01','PD-KB401WSC'],['AHUX01','PD-KB820WS'],['AHJX01','PD-KB800BS']];
+officialHashes.AHUX01=hash;
+if(await verifyFlashImage(data)!=='AHUX01')throw Error('recognized stock rejected');
+const pairs=[['AHUX01','PD-KB820WS'],['AHUX01','PD-KB401WSC'],['AHUX01','PD-KB421BSC']];
 for(const [model,number] of pairs){const info=new Uint8Array(64);info.set(new TextEncoder().encode(number),6);let failed=false;try{checkTarget(info,model)}catch(e){failed=true}if(!failed)throw Error('variant mismatch accepted')}
 let failed=false;try{validate(Uint8Array.from(wrongVersion))}catch(e){failed=true}if(!failed)throw Error('wrong version family accepted');
 ''', legacy=list(legacy),hash=hashlib.sha256(legacy).hexdigest(),
-                    wrongVersion=list(container('AHHX01',version=[10,8,0,3])))
+                    wrongVersion=list(container('AHUX01',version=[10,8,0,3])))
 
     def test_file_labels_and_disabled_mismatch(self):
         stock=container('AHUX01')
@@ -133,25 +130,18 @@ stockHashes.AHUX01=hash;
 function file(id,bytes){$(id).files=[{arrayBuffer:async()=>Uint8Array.from(bytes).buffer}]}
 file('stock',stock);file('app',app);await inspectPatch();
 if($('patchButton').disabled||!$('appInfo').textContent.includes('26.11.20-test')||!$('stockInfo').textContent.includes('A0.48'))throw Error('missing compatible file labels');
-file('app',jis);await inspectPatch();
-if(!$('patchButton').disabled||!$('patchStatus').textContent.includes('Incompatible'))throw Error('mismatch button enabled');
-''', stock=list(stock),hash=hashlib.sha256(stock).hexdigest(),app=list(application('AHUX01')),jis=list(application('AHJX01')))
+file('app',foreignapp);await inspectPatch();
+if(!$('patchButton').disabled||!$('appInfo').textContent.includes('Missing or ambiguous'))throw Error('foreign-model binary accepted');
+''', stock=list(stock),hash=hashlib.sha256(stock).hexdigest(),app=list(application('AHUX01')),foreignapp=list(application('AHJX01')))
 
     def test_webhid_stream_and_recovery_identity_checks(self):
-        for model, number in [('AHHX01','PD-KB401W'),('AHHS01','PD-KB401WSC'),
-                              ('AHKS01','PD-KB421WSC'),('AHUX01','PD-KB800WS'),('AHJX01','PD-KB820BS')]:
-            self.run_js(self.flash_harness(),image=list(container(model)),number=number,wrongAt=0)
+        self.run_js(self.flash_harness(),image=list(container('AHUX01')),number='PD-KB800WS',wrongAt=0)
         for wrong_at in (1,2):
             self.run_js(self.flash_harness(),image=list(container('AHUX01')),number='PD-KB800WS',wrongAt=wrong_at)
 
     def test_anniversary_model_suffix_before_and_after_recovery(self):
-        for model, number, recovery in [
-            ('AHHS01','PD-KB401WSC1','PD-KB401WSC'),
-            ('AHKS01','PD-KB421BSC1','PD-KB421BSC'),
-            ('AHUX01','PD-KB800YSC1','PD-KB800YSC'),
-            ('AHJX01','PD-KB820WSC1','PD-KB820WSC')]:
-            self.run_js(self.flash_harness(),image=list(container(model)),
-                        number=number,recoveryNumber=recovery,wrongAt=0)
+        self.run_js(self.flash_harness(),image=list(container('AHUX01')),
+                    number='PD-KB800YSC1',recoveryNumber='PD-KB800YSC',wrongAt=0)
 
     def test_same_family_different_colour_is_not_the_same_recovery_target(self):
         self.run_js(self.flash_harness(),image=list(container('AHUX01')),

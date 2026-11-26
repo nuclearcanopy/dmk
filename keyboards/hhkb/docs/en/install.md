@@ -47,8 +47,9 @@ file's CRCs, version and SHA-256 and the binary's embedded model/version
 metadata (`DMKHHKB1|<model>|<version>|END`, defined in
 `platforms/stm32l072/platform.c`). Processing is local.
 
-> `tools/hhkb/` contains upstream code paths for other models and
-> `--stm32-only`. They are not part of nxmk and are not documented here.
+> `patch_hybrid_hfb.py --stm32-only` builds an experimental Hybrid container
+> with a deliberately invalid blank radio image. It is not part of the
+> supported install flow and is not documented here.
 
 Do not commit or redistribute the patched `.hfb`: it contains the vendor
 payload.

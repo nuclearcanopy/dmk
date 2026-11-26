@@ -16,5 +16,3 @@ keyboards/hhkb/docs/dev/
 *.hfb
 *.HFB
 keyboards/hhkb/local/
-keyboards/hhkb_hybrid/binaries/
-keyboards/hhkb_classic/binaries/

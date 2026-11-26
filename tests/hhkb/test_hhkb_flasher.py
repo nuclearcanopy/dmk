@@ -9,6 +9,7 @@ import tempfile
 
 sys.modules.setdefault('hid', types.ModuleType('hid'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/hhkb'))
+from patch_hybrid_hfb import make_stm32_only
 spec = importlib.util.spec_from_file_location('hhkb_flasher', Path(__file__).resolve().parents[2] / 'tools/hhkb/hhkb_flasher.py')
 flasher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(flasher)
@@ -24,7 +25,7 @@ class FlasherValidationTest(unittest.TestCase):
             self.assertEqual(flasher.find_hhkb_device()['interface_number'], 2)
 
     def setUp(self):
-        self.good = flasher.wrap_binary_to_hfb(b'\x00\x50\x00\x20\x01\x00\x01\x08')
+        self.good = make_stm32_only(b'\x00\x50\x00\x20\x09\x00\x01\x08' + bytes(4))
 
     def test_complete_model_families_and_suffixes(self):
         from .hhkb_model_cases import model_cases
@@ -34,34 +35,27 @@ class FlasherValidationTest(unittest.TestCase):
                 self.assertEqual(flasher.device_model('  '+number.lower()+'  '), expected)
 
     def test_models(self):
-        # Classic models (AHHX01)
-        for model in ('PD-KB401W', 'PD-KB401B', 'PD-KB401WN', 'PD-KB401BN'):
-            self.assertEqual(flasher.device_model(model), 'AHHX01')
-        # Type-S models (AHHS01)
-        for model in ('PD-KB401WSC', 'PD-KB401BSC', 'PD-KB401YSC'):
-            self.assertEqual(flasher.device_model(model), 'AHHS01')
-        # JIS models (PD-KB421)
-        for model in ('PD-KB421BSC', 'PD-KB421WSC', 'PD-KB421YSC'):
-            self.assertEqual(flasher.device_model(model), 'AHKS01')
-        self.assertEqual(flasher.device_model('PD-KB800WSC1'), 'AHUX01')
-        self.assertEqual(flasher.device_model('PD-KB820YNS'), 'AHJX01')
-        self.assertIsNone(flasher.device_model('unknown'))
-        self.assertEqual(flasher.validate_container(self.good, 'AHHX01'), 'AHHX01')
-        with self.assertRaises(ValueError): flasher.validate_container(self.good, 'AHHS01')
-        with self.assertRaises(ValueError): flasher.validate_container(self.good, None)
-        with self.assertRaisesRegex(ValueError, 'does not match'): flasher.validate_container(self.good, 'AHKS01')
-        self.assertEqual(flasher.validate_container(self.good, None, check_model=False), 'AHHX01')
+        for model in ('PD-KB800WSC1', 'PD-KB800BS', 'PD-KB800YNS'):
+            self.assertEqual(flasher.device_model(model), 'AHUX01')
+        for model in ('PD-KB401W', 'PD-KB401WSC', 'PD-KB421BSC', 'PD-KB820YNS', 'unknown'):
+            self.assertIsNone(flasher.device_model(model))
+        self.assertEqual(flasher.validate_container(self.good, 'AHUX01'), 'AHUX01')
+        for expected in ('AHHS01', 'AHJX01', None):
+            with self.assertRaises(ValueError): flasher.validate_container(self.good, expected)
+            with self.assertRaises(ValueError): flasher.validate_container(self.good, expected, check_model=False)
+        with self.assertRaisesRegex(ValueError, 'does not match'): flasher.validate_container(self.good, 'AHHS01')
+        with self.assertRaisesRegex(ValueError, '282,672'): flasher.validate_container(self.good[:-1], 'AHUX01')
 
     def test_crc_checks_independent_of_model(self):
         bad = bytearray(self.good)
         bad[10] ^= 1
         with self.assertRaisesRegex(ValueError, 'outer CRC'):
-            flasher.validate_container(bad, 'AHHX01', check_model=False)
+            flasher.validate_container(bad, 'AHUX01', check_model=False)
         outer = flasher.compute_crc16_mcrf4xx(bad[2:])
         bad[:2] = outer.to_bytes(2, 'little')
         with self.assertRaisesRegex(ValueError, 'firmware CRC'):
-            flasher.validate_container(bad, 'AHHX01')
-        self.assertEqual(flasher.validate_container(bad, 'AHHX01', check_crc=False), 'AHHX01')
+            flasher.validate_container(bad, 'AHUX01')
+        self.assertEqual(flasher.validate_container(bad, 'AHUX01', check_crc=False), 'AHUX01')
         with self.assertRaises(ValueError): flasher.validate_container(bad, 'AHHS01', check_crc=False)
 
     def test_short_write_is_failure(self):
@@ -90,7 +84,7 @@ class FlasherValidationTest(unittest.TestCase):
         self.assertEqual(dev.dev_info['path'], b'old')
 
     def test_firmware_transfer_matches_pfu_packet_format(self):
-        image = flasher.wrap_binary_to_hfb(bytes(range(256)) * 256)
+        image = self.good
         dev = flasher.HHKBDevice.__new__(flasher.HHKBDevice)
         packets = []
         dev.send_report = packets.append
@@ -109,11 +103,9 @@ class FlasherValidationTest(unittest.TestCase):
         self.assertEqual(packets[-1][2], flasher.CMD_FIRMUP_END)
 
     def test_hybrid_transfer_and_nordic_error_reporting(self):
-        from patch_hybrid_hfb import make_stm32_only
-
-        image = make_stm32_only(b'\x00\x50\x00\x20\x09\x00\x01\x08' + bytes(4), layout='jis')
-        self.assertEqual(flasher.validate_container(image, 'AHJX01'), 'AHJX01')
-        for model in ('AHUX01', 'AHHS01', None):
+        image = self.good
+        self.assertEqual(flasher.validate_container(image, 'AHUX01'), 'AHUX01')
+        for model in ('AHJX01', 'AHHS01', None):
             with self.assertRaises(ValueError):
                 flasher.validate_container(image, model, check_model=False)
 
@@ -144,14 +136,14 @@ class FlasherValidationTest(unittest.TestCase):
     def test_info_uses_payload_offsets(self):
         response = bytearray(64)
         response[:6] = b'\x55\x55\x02\x00\x00\x39'
-        response[6:15] = b'PD-KB401W'
+        response[6:18] = b'PD-KB800WSC1'
         response[46:50] = bytes([10, 4, 2, 9])
         response[62] = 1
         dev = flasher.HHKBDevice.__new__(flasher.HHKBDevice)
         dev.send_report = lambda _: None
         dev.read_report = lambda timeout_ms: bytes(response)
         info = dev.get_info()
-        self.assertEqual(info['type_number'], 'PD-KB401W')
+        self.assertEqual(info['type_number'], 'PD-KB800WSC1')
         self.assertEqual(info['version'], 'A4.29')
         self.assertTrue(info['bank2_broken'])
 
@@ -162,7 +154,7 @@ class FlasherValidationTest(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *_): pass
             def get_info(self):
-                return {'type_number': 'PD-KB401W', 'version': 'B4.16',
+                return {'type_number': 'PD-KB800WS', 'version': 'A0.48',
                         'raw_version': '', 'bank2_broken': False}
             def flash_firmware(self, *_args, **_kwargs):
                 Keyboard.started = True

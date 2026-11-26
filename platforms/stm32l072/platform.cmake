@@ -94,50 +94,11 @@ set(PLATFORM_LIBS
     -T${LINKER_SCRIPT}
 )
 
-# Option to compile for Classic Type-S (AHHS01, version A8.xx)
-option(HHKB_CLASSIC_TYPE_S "Build firmware container for HHKB Classic Type-S (AHHS01)" OFF)
-
-if(DEFINED DEFINE)
-    string(REPLACE "," ";" HHKB_BUILD_DEFINES "${DEFINE}")
-    set(HHKB_CLASSIC_TYPE_S OFF)
-    if("HHKB_CLASSIC_TYPE_S" IN_LIST HHKB_BUILD_DEFINES)
-        set(HHKB_CLASSIC_TYPE_S ON)
-    endif()
-endif()
-
-# Post-build packaging into .bin and HHKB .hfb container
+# Post-build packaging into a raw .bin (the .hfb is built by tools/hhkb/patch_hybrid_hfb.py)
 function(platform_post_build TARGET_NAME)
-    if(HHKB_BUILD_HYBRID)
-        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/${TARGET_NAME}.hfb
-            COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin
-            COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${TARGET_NAME}>
-            VERBATIM)
-        return()
-    endif()
-
-    if("HHKB_JIS" IN_LIST HHKB_BUILD_DEFINES)
-        set(HFB_MODEL_ARG "--model" "AHKS01" "--version" "A9.50")
-        set(MODEL_COMMENT "Classic JIS (AHKS01)")
-    elseif(HHKB_CLASSIC_TYPE_S)
-        set(HFB_MODEL_ARG "--model" "AHHS01" "--version" "A8.50")
-        set(MODEL_COMMENT "Type-S (AHHS01)")
-    else()
-        set(HFB_MODEL_ARG "--model" "AHHX01" "--version" "A4.50")
-        set(MODEL_COMMENT "Classic (AHHX01)")
-    endif()
-
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/${TARGET_NAME}.hfb
         COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin
-        COMMAND python3 ${DMK_ROOT}/tools/hhkb/make_hfb.py ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin ${CMAKE_BINARY_DIR}/${TARGET_NAME}.hfb ${HFB_MODEL_ARG}
         COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${TARGET_NAME}>
-        COMMENT "Generating binary and HHKB ${MODEL_COMMENT} .hfb update package for ${TARGET_NAME}"
-    )
-
-    # Custom target to flash directly via USB HID: cmake --build <dir> --target flash
-    add_custom_target(flash
-        COMMAND uv run --with hidapi python3 ${DMK_ROOT}/tools/hhkb/hhkb_flasher.py ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin
-        DEPENDS ${TARGET_NAME}
-        COMMENT "Flashing ${TARGET_NAME}.bin to HHKB via USB HID..."
-    )
+        VERBATIM)
 endfunction()
