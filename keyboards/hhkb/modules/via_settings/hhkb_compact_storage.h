@@ -4,6 +4,9 @@
 /* Load is for startup only. Saves are queued by the USB storage task; callers
  * never retain EEPROM pointers. */
 bool hhkb_compact_load_cal(hhkb_eeprom_cal_t *cal);
+#if HHKB_RT_KEYMASK
+bool hhkb_compact_load_mask(hhkb_rt_mask_t *mask);
+#endif
 void hhkb_compact_save_cal(const hhkb_eeprom_cal_t *cal);
 bool hhkb_compact_legacy_allowed(void);
 bool hhkb_compact_writable(void);

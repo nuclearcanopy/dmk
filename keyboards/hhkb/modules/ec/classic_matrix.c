@@ -4,6 +4,10 @@
 #include "ec_curve.h"
 #include "rapid_trigger.h"
 #include "scan_cache.h"
+#if HHKB_RT_KEYMASK
+#include "scan_transition.h"
+static hhkb_scan_transition_t s_scan_transition[MATRIX_COLS][MATRIX_ROWS];
+#endif
 #ifdef HHKB_HYBRID
 #include "hybrid.h"
 #endif
@@ -49,6 +53,36 @@ static inline uint16_t adc_finish_sample(void) {
 }
 
 static hhkb_scan_cache_t s_scan_cache;
+#if HHKB_RT_DEADBAND
+static rt_noise_t s_rt_noise[HHKB_RT_KEY_COUNT];
+void hhkb_get_noise_diag(uint8_t slot, uint8_t *col, uint8_t *row,
+                         uint16_t *noise, uint16_t *db, uint16_t *press, uint16_t *release) {
+    static const uint8_t positions[HHKB_RT_KEY_COUNT][2] = {
+#define RT_POSITION(c,r,s) [s] = {c,r},
+        HHKB_RT_KEYS(RT_POSITION)
+#undef RT_POSITION
+    };
+    if (slot >= HHKB_RT_KEY_COUNT) slot = 0;
+    rt_noise_t sample = {0};
+    taskENTER_CRITICAL();
+    /* A single aligned halfword is atomic even if this task preempted the
+       matrix task midway through the estimator update. */
+    sample.n_q8 = *(volatile uint16_t *)&s_rt_noise[slot].n_q8;
+    taskEXIT_CRITICAL();
+    rt_cfg_t rt, classic;
+    hhkb_get_scan_cfgs(&rt, &classic);
+    *col = positions[slot][0];
+    *row = positions[slot][1];
+    *noise = sample.n_q8;
+    *db = rt_noise_db_pm(&sample);
+    *press = rt.press_pm;
+    *release = rt.release_pm;
+#if HHKB_RT_DEADBAND == 1
+    if (*press < *db) *press = *db;
+    if (*release < *db) *release = *db;
+#endif
+}
+#endif
 // Reused by the single matrix task; no extra stack pressure.
 static uint16_t s_cal_samples[MATRIX_COLS][MATRIX_ROWS];
 typedef struct {
@@ -66,12 +100,45 @@ void scan_prepare_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan, bo
 
 // Pure RAM work: process the preceding key while C57 discharges.
 // Logging and calibration callbacks must stay outside the acquisition IRQ mask.
+#if HHKB_RT_DEADBAND
+static __attribute__((noinline, section(".RamFunc"), optimize("O2")))
+#else
 static inline __attribute__((always_inline))
+#endif
 bool scan_process_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan,
+#if HHKB_RT_KEYMASK
+                          const rt_scan_cfg_t *classic, const hhkb_rt_mask_t *mask,
+#endif
                           matrix_row_t matrix[], uint8_t lock_n) {
     if (!pending->valid) return false;
     rt_key_t *key = &s_rt_keys[pending->col][pending->row];
     matrix_row_t previous = matrix[pending->row];
+#if HHKB_RT_KEYMASK
+    bool cache_valid = hhkb_scan_cache_entry_valid(&s_scan_cache, pending->col, pending->row);
+    bool member = cache_valid ? s_scan_cache.key[pending->col][pending->row].rt_member :
+#if HHKB_RT_ARBITRARY_SELECTION
+                                hhkb_rt_mask_member(mask, pending->col, pending->row);
+#else
+                                hhkb_rt_slot1_of(pending->col, pending->row) != 0;
+    (void)mask;
+#endif
+    bool mode = member && scan->cfg.rt_enabled;
+    if (hhkb_scan_transition(&s_scan_transition[pending->col][pending->row], key,
+            &s_scan_cache.key[pending->col][pending->row], scan, mode, pending->raw)) {
+        pending->pressed = (previous & (1U << pending->col)) != 0;
+        if (!s_scan_transition[pending->col][pending->row].waiting) {
+            matrix[pending->row] &= ~(1U << pending->col);
+            pending->pressed = false;
+        }
+        return previous != matrix[pending->row];
+    }
+    scan = hhkb_rt_select_cfg(member, scan, classic);
+#if HHKB_RT_DEADBAND
+    uint8_t slot = hhkb_rt_slot1_of(pending->col, pending->row);
+    if (slot && member && !scan->cfg.rt_enabled && pending->raw != UINT16_MAX)
+        s_rt_noise[slot - 1].hist = 0;
+#endif
+#endif
     if (pending->raw == UINT16_MAX) {
         // Timeout: reported bit and lockout state stay as they were.
         pending->pressed = key->down;
@@ -83,10 +150,27 @@ bool scan_process_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan,
         // later RT enable; the cached RT path never writes the cache, so the
         // RT fallback does not either.
         uint16_t travel;
+#if HHKB_RT_DEADBAND
+        if (scan->cfg.rt_enabled)
+            pending->pressed = rt_update_scan_sample_db(key, &s_rt_noise[slot ? slot - 1 : 0], scan, pending->raw, &travel, false);
+        else
+#endif
         pending->pressed = rt_update_scan_sample(key, scan, pending->raw, &travel);
         if (!scan->cfg.rt_enabled) s_scan_cache.key[pending->col][pending->row].last_raw = pending->raw;
     } else if (scan->cfg.rt_enabled) {
+#if HHKB_RT_DEADBAND
+        rt_raw_cache_t *raw_cache = &s_scan_cache.key[pending->col][pending->row];
+        rt_noise_t *noise = &s_rt_noise[slot ? slot - 1 : 0];
+        if (pending->raw < raw_cache->release_raw) {
+            noise->hist = 0;
+            key->down = key->latched = false;
+            key->ext = 0;
+            pending->pressed = false;
+        } else
+            pending->pressed = rt_update_scan_sample_db(key, noise, scan, pending->raw, NULL, true);
+#else
         pending->pressed = rt_update_scan_cached(key, &s_scan_cache.key[pending->col][pending->row], scan, pending->raw, NULL);
+#endif
     } else {
         pending->pressed = rt_update_raw_cached(key, &s_scan_cache.key[pending->col][pending->row], pending->raw);
     }
@@ -213,6 +297,10 @@ __attribute__((noinline)) static void scan_adc_idle(void) {
 
 __attribute__((section(".RamFunc"), optimize("O2")))
 bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
+#if HHKB_RT_KEYMASK
+    hhkb_scan_snapshot_t snapshot;
+    hhkb_get_scan_snapshot(&snapshot);
+#endif
 #ifdef HHKB_HYBRID
     // Stock scan wrapper reasserts sensor power and keeps PD2 LOW.
     GPIOC->BSRR = 1U << 14;
@@ -243,8 +331,22 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
     bool capture = hhkb_cal_is_capturing_baseline();
     bool capture_failed = false;
     bool is_calibrating = hhkb_is_calibrating();
+#if HHKB_RT_KEYMASK
+    rt_cfg_t scan_cfg = snapshot.rt, classic_cfg = snapshot.classic;
+#else
     rt_cfg_t scan_cfg = hhkb_get_scan_cfg();
+#endif
     const uint16_t *curve = ec_curve_lut;
+#if HHKB_RT_DEADBAND
+    static uint32_t noise_curve_revision, noise_range_revision;
+    if (noise_curve_revision != ec_curve_revision || noise_range_revision != rt_range_revision) {
+        noise_curve_revision = ec_curve_revision;
+        noise_range_revision = rt_range_revision;
+        for (unsigned i = 0; i < HHKB_RT_KEY_COUNT; ++i) {
+            s_rt_noise[i] = (rt_noise_t){0};
+        }
+    }
+#endif
     static uint32_t curve_revision;
     if (curve_revision != ec_curve_revision) {
         curve_revision = ec_curve_revision;
@@ -256,6 +358,11 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
     if (scan_cfg.act_pm > max_travel) scan_cfg.act_pm = max_travel;
     if (scan_cfg.press_pm > max_travel) scan_cfg.press_pm = max_travel;
     if (scan_cfg.release_pm > max_travel) scan_cfg.release_pm = max_travel;
+#if HHKB_RT_KEYMASK
+    if (classic_cfg.act_pm > max_travel) classic_cfg.act_pm = max_travel;
+    if (classic_cfg.press_pm > max_travel) classic_cfg.press_pm = max_travel;
+    if (classic_cfg.release_pm > max_travel) classic_cfg.release_pm = max_travel;
+#endif
     static TickType_t last_debug_sample;
     bool debug_topre = hhkb_get_debug_flag(DEBUG_FLAG_TOPRE);
     if (debug_topre) {
@@ -265,7 +372,14 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
     }
     rt_scan_cfg_t prepared;
     rt_prepare_scan(&prepared, &scan_cfg, curve);
+#if HHKB_RT_KEYMASK
+    rt_scan_cfg_t classic_prepared;
+    rt_prepare_scan(&classic_prepared, &classic_cfg, curve);
+    hhkb_scan_cache_prepare(&s_scan_cache, s_rt_keys, &prepared, &classic_prepared,
+                            &snapshot.mask, snapshot.revision, rt_range_revision, ec_curve_revision);
+#else
     hhkb_scan_cache_prepare(&s_scan_cache, s_rt_keys, &prepared, rt_range_revision, ec_curve_revision);
+#endif
     scan_pending_t pending = {0};
     // Chatter lockout in scans, by effective scan rate (4 = 1000 Hz).
     static const uint8_t lock_scans[7] = {1, 1, 3, 5, 15, 2, 1};
@@ -287,7 +401,11 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
             // so waiting 4 us since settle_start guarantees >=2 us of discharge.
             GPIOC->BSRR = (1U << 8);
             if (__builtin_expect(debug_topre, 0)) scan_prepare_pending(&pending, &prepared, true);
-            changed |= scan_process_pending(&pending, &prepared, current_matrix, lock_n);
+            changed |= scan_process_pending(&pending, &prepared,
+#if HHKB_RT_KEYMASK
+                                            &classic_prepared, &snapshot.mask,
+#endif
+                                            current_matrix, lock_n);
             if (__builtin_expect(debug_topre, 0)) scan_report_pending(&pending, false, false, true, &capture_failed);
             scan_wait_since(settle_start, 4);
 
@@ -304,6 +422,27 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
             // allows Nordic SPI after triggering; USB stays masked until EOC.
             if (adc_autoff) __set_PRIMASK(saved_primask);
             uint16_t val = started ? adc_finish_sample() : UINT16_MAX;
+#if !HHKB_RT_ARBITRARY_SELECTION
+#if HHKB_RT_OVERSAMPLE == 2
+            if (val != UINT16_MAX && !adc_autoff && !is_calibrating &&
+                lock_rate == 4 && scan_cfg.rt_enabled && hhkb_rt_slot1_of(col, row) &&
+                s_rt_keys[col][row].latched) {
+                adc_start_sample();
+                uint16_t second = adc_finish_sample();
+                if (second != UINT16_MAX) val = ((uint32_t)val + second + 1) >> 1;
+            }
+#endif
+#endif
+#if HHKB_RT_ARBITRARY_SELECTION && HHKB_RT_OVERSAMPLE == 2
+            if (val != UINT16_MAX && !adc_autoff && !is_calibrating &&
+                lock_rate == 4 && scan_cfg.rt_enabled &&
+                hhkb_rt_mask_member(&snapshot.mask, col, row) &&
+                s_rt_keys[col][row].latched) {
+                adc_start_sample();
+                uint16_t second = adc_finish_sample();
+                if (second != UINT16_MAX) val = ((uint32_t)val + second + 1) >> 1;
+            }
+#endif
             GPIOB->BSRR = row_pins[row];
             __set_PRIMASK(saved_primask);
             settle_start = (uint16_t)TIM2->CNT;
@@ -320,7 +459,11 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
 
     // Flush the last key in this pass; no sample is deferred to the next scan.
     scan_prepare_pending(&pending, &prepared, debug_topre);
-    changed |= scan_process_pending(&pending, &prepared, current_matrix, lock_n);
+    changed |= scan_process_pending(&pending, &prepared,
+#if HHKB_RT_KEYMASK
+                                    &classic_prepared, &snapshot.mask,
+#endif
+                                    current_matrix, lock_n);
     scan_report_pending(&pending, false, false, debug_topre, &capture_failed);
 
     // Disable OpAmp

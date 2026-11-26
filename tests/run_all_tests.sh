@@ -84,6 +84,28 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
         -o "${HHKB_TEST_DIR}/test_rt_lockout"
     "${HHKB_TEST_DIR}/test_rt_lockout"
     rm -f "${HHKB_TEST_DIR}/test_rt_lockout"
+    clang -std=c11 -Wall -Wextra -Werror -O2 -DHHKB_RT_KEYMASK=1 -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
+        "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/test_rt_keymask.c" -o /tmp/dmk-rt-keymask
+    /tmp/dmk-rt-keymask
+    clang -std=c11 -Wall -Wextra -Werror -O2 -DHHKB_RT_KEYMASK=1 -DHHKB_RT_ARBITRARY_SELECTION=1 \
+        -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
+        "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/test_scan_mask_transition_v2.c" \
+        -o /tmp/dmk-scan-mask-transition
+    /tmp/dmk-scan-mask-transition
+    for mask in 0 1; do
+        clang -std=c11 -Wall -Wextra -Werror -O2 -DHHKB_RT_KEYMASK="$mask" \
+            -I "${HHKB_TEST_DIR}/ec_settings_mocks" -I "${SCRIPT_DIR}/keyboards/hhkb" \
+            -I "${SCRIPT_DIR}/platforms/stm32l072" \
+            -I "${SCRIPT_DIR}/dmk_core/include" "${HHKB_TEST_DIR}/test_ec_settings_rt_mask.c" \
+            -o /tmp/dmk-ec-settings-rt-mask
+        /tmp/dmk-ec-settings-rt-mask
+    done
+    for mode in 1 2; do
+        clang -std=c11 -Wall -Wextra -Werror -O2 -DHHKB_RT_DEADBAND="$mode" -DHHKB_RT_KEYMASK=1 \
+            -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
+            "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/test_rt_noise.c" -o /tmp/dmk-rt-noise
+        /tmp/dmk-rt-noise
+    done
     clang -std=c11 -Wall -Wextra -Werror -O2 -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
         "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/rapid_trigger_reference.c" \
         "${HHKB_TEST_DIR}/test_scan_processing.c" -o /tmp/dmk-scan-processing-test

@@ -727,9 +727,17 @@ static inline void vial_eeprom_save_now(void) {
 __attribute__((weak)) void vial_keyboard_storage_changed(void) {}
 
 void vial_eeprom_save(void) {
-    vial_keyboard_storage_changed();
-    s_eeprom_dirty_time = xTaskGetTickCount();
+    TickType_t now = xTaskGetTickCount();
+    taskENTER_CRITICAL();
+    s_eeprom_dirty_time = now;
     s_eeprom_dirty = true;
+    taskEXIT_CRITICAL();
+}
+
+/* Task context only, after modifying data in the compact image. */
+static void vial_image_changed_and_save(void) {
+    vial_keyboard_storage_changed();
+    vial_eeprom_save();
 }
 
 __attribute__((weak)) void vial_keyboard_eeprom_task(void) {}
@@ -757,7 +765,9 @@ void vial_eeprom_task(void) {
 #endif
         s_reset_erased = !clear_settings ||
             (vial_keyboard_settings_reset() && vial_platform_settings_reset());
+        taskENTER_CRITICAL();
         s_eeprom_dirty = false;
+        taskEXIT_CRITICAL();
         s_reset_status = s_reset_erased ? "Restarting..." : "Reset failed; retry";
         if (s_reset_erased && vial_keyboard_reset_allowed()) {
 #ifdef HHKB_COMPACT_STORAGE
@@ -771,13 +781,13 @@ void vial_eeprom_task(void) {
 #endif
     vial_keyboard_eeprom_task();
     vial_platform_storage_poll();
-    if (s_eeprom_dirty) {
-        TickType_t now = xTaskGetTickCount();
-        if ((now - s_eeprom_dirty_time) >= pdMS_TO_TICKS(VIAL_EEPROM_SAVE_DELAY_MS)) {
-            s_eeprom_dirty = false;
-            vial_eeprom_save_now();
-        }
-    }
+    TickType_t now = xTaskGetTickCount();
+    taskENTER_CRITICAL();
+    bool save = s_eeprom_dirty &&
+        (now - s_eeprom_dirty_time) >= pdMS_TO_TICKS(VIAL_EEPROM_SAVE_DELAY_MS);
+    if (save) s_eeprom_dirty = false;
+    taskEXIT_CRITICAL();
+    if (save) vial_eeprom_save_now();
 }
 
 // Boards with incremental EEPROM writers can request their own service cadence.
@@ -787,7 +797,10 @@ TickType_t vial_eeprom_poll_interval(void) {
 #ifdef VIA_FULL_SETTINGS_RESET
     if (s_reset_pending) return pdMS_TO_TICKS(2);
 #endif
-    return pdMS_TO_TICKS(s_eeprom_dirty || vial_keyboard_eeprom_busy() ? 2 : 1000);
+    taskENTER_CRITICAL();
+    bool dirty = s_eeprom_dirty;
+    taskEXIT_CRITICAL();
+    return pdMS_TO_TICKS(dirty || vial_keyboard_eeprom_busy() ? 2 : 1000);
 }
 
 void vial_init(void) {
@@ -946,7 +959,7 @@ void vial_process_packet(uint8_t const *request, uint8_t *response) {
         int16_t ki = keyboard_get_flat_key_index(row, col);
         if (ki >= 0 && layer < DYNAMIC_KEYMAP_MAX_LAYERS) {
             dynamic_keymap[layer][ki] = from_via_keycode(via_key);
-            vial_eeprom_save();
+            vial_image_changed_and_save();
         }
         break;
     }
@@ -998,7 +1011,7 @@ void vial_process_packet(uint8_t const *request, uint8_t *response) {
                 dynamic_keymap[layer][ki] = from_via_keycode(via_key);
             }
         }
-        vial_eeprom_save();
+        vial_image_changed_and_save();
         break;
     }
 
@@ -1033,7 +1046,7 @@ void vial_process_packet(uint8_t const *request, uint8_t *response) {
 
     case VIA_EEPROM_RESET: {
         vial_storage_init_default();
-        vial_eeprom_save();
+        vial_image_changed_and_save();
         break;
     }
 
@@ -1169,14 +1182,14 @@ void vial_process_packet(uint8_t const *request, uint8_t *response) {
         }
         if ((uint32_t)offset + size <= DYNAMIC_KEYMAP_MACRO_BUFFER_SIZE) {
             memcpy(&dynamic_macro_buffer[offset], &request[4], size);
-            vial_eeprom_save();
+            vial_image_changed_and_save();
         }
         break;
     }
 
     case VIA_DYNAMIC_KEYMAP_MACRO_RESET: {
         memset(dynamic_macro_buffer, 0, DYNAMIC_KEYMAP_MACRO_BUFFER_SIZE);
-        vial_eeprom_save();
+        vial_image_changed_and_save();
         break;
     }
 
@@ -1262,7 +1275,7 @@ void vial_process_packet(uint8_t const *request, uint8_t *response) {
                     for (size_t i = 0; i < sizeof(vial_combo_entry_t); i++) {
                         dst[i] = request[4 + i];
                     }
-                    vial_eeprom_save();
+                    vial_image_changed_and_save();
                 }
             } else {
                 memset(response, 0xFF, 32);

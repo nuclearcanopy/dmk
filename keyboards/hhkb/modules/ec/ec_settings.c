@@ -1,4 +1,17 @@
 #include "ec_settings.h"
+#ifdef EC_SETTINGS_MASK_HOST_TEST
+#include "task.h"
+static bool s_custom_calibration = true;
+static rt_cfg_t s_rt_cfg;
+static uint16_t s_classic_release_pm = 100;
+static bool s_settings_dirty;
+#if HHKB_RT_KEYMASK
+static hhkb_rt_mask_t s_rt_mask;
+static uint32_t s_rt_mask_revision;
+static volatile bool s_rt_mask_storage_event;
+static void rt_mask_init(void);
+#endif
+#else
 #ifdef HHKB_COMPACT_STORAGE
 #include "../via_settings/hhkb_compact_storage.h"
 #endif
@@ -56,6 +69,12 @@ static rt_cfg_t s_rt_cfg = {
 };
 static uint16_t s_classic_release_pm = 100; // Default 10% travel hysteresis (0.4 mm)
 static uint8_t s_actuation_offset_pct = 75;
+#if HHKB_RT_KEYMASK
+static hhkb_rt_mask_t s_rt_mask;
+static uint32_t s_rt_mask_revision;
+static volatile bool s_rt_mask_storage_event;
+static void rt_mask_init(void);
+#endif
 
 static uint8_t s_scan_rate = 4; // 1000 Hz
 static bool s_power_saving = true; // Enabled by default
@@ -115,11 +134,51 @@ static uint16_t compute_crc16(const uint8_t *data, size_t len) {
 }
 
 #define HHKB_FACTORY_BASELINE_ADDR 0x08081000UL
+
+#ifdef HHKB_HYBRID
+// Per-key baseline/peak captured from this specific board's VIA calibration
+// routine (hhkb_calibration_start/finish), read back over the debug channel
+// and baked in here so a fresh flash/factory-reset starts from real measured
+// values instead of the flat 800/3170 generic fallback. [col][row] indexed.
+static const uint16_t HHKB_PERSONAL_CAL_BASELINE[MATRIX_COLS][MATRIX_ROWS] = {
+    { 784,  642,  468,  698}, // col 0
+    { 333,  595,  496,  823}, // col 1
+    { 564,  894,  617,  369}, // col 2
+    { 631,  468,  382,  894}, // col 3
+    { 639,  520,  312,  551}, // col 4
+    { 693,  389,  619,  346}, // col 5
+    { 580,  307,  391,  417}, // col 6
+    { 639,  571,  609,  456}, // col 7
+    { 742,  493,  459,  309}, // col 8
+    { 481,  523,  551,  376}, // col 9
+    { 752,  553,  711,  601}, // col 10
+    { 493,  560,  324,  390}, // col 11
+    { 596,  476,  700,  637}, // col 12
+    { 493,  604,  538,  616}, // col 13
+    { 435,  973,  639,  894}, // col 14
+};
+static const uint16_t HHKB_PERSONAL_CAL_PEAK[MATRIX_COLS][MATRIX_ROWS] = {
+    {3149, 2702, 2581, 2771}, // col 0
+    {2889, 3086, 3003, 2905}, // col 1
+    {2912, 3222, 2876, 2927}, // col 2
+    {2860, 2929, 2957, 3222}, // col 3
+    {2892, 2928, 2853, 2988}, // col 4
+    {2958, 2966, 2952, 3004}, // col 5
+    {3064, 2853, 2872, 2800}, // col 6
+    {2892, 2924, 2970, 2929}, // col 7
+    {3029, 2940, 2927, 3016}, // col 8
+    {3060, 2956, 2988, 3067}, // col 9
+    {2946, 3044, 2852, 2980}, // col 10
+    {3039, 2925, 2957, 3069}, // col 11
+    {2992, 3051, 3065, 3013}, // col 12
+    {2759, 3008, 3050, 3106}, // col 13
+    {2808, 3093, 2892, 3222}, // col 14
+};
+#endif
+
 static uint16_t get_factory_baseline(uint8_t col, uint8_t row) {
 #ifdef HHKB_HYBRID
-    (void)col;
-    (void)row;
-    return 0; // Require DMK calibration until Hybrid factory EEPROM is mapped.
+    return HHKB_PERSONAL_CAL_BASELINE[col][row];
 #else
     const uint16_t *base = (const uint16_t *)HHKB_FACTORY_BASELINE_ADDR;
     uint8_t idx = (col << 3) | (row & 7);
@@ -134,6 +193,10 @@ static uint16_t get_default_baseline(uint8_t col, uint8_t row) {
 }
 
 static uint16_t get_default_peak(uint8_t col, uint8_t row) {
+#ifdef HHKB_HYBRID
+    uint16_t p = HHKB_PERSONAL_CAL_PEAK[col][row];
+    if (p != 0) return p;
+#endif
     uint16_t base = get_default_baseline(col, row);
     uint32_t peak = (uint32_t)base + TOPRE_TYPICAL_TRAVEL_COUNTS;
     return (peak <= 4095) ? (uint16_t)peak : 4000;
@@ -185,8 +248,11 @@ bool hhkb_settings_storage_writable(void) {
 }
 
 void hhkb_settings_mark_dirty(void) {
-    s_settings_dirty_time = xTaskGetTickCount();
+    TickType_t now = xTaskGetTickCount();
+    taskENTER_CRITICAL();
+    s_settings_dirty_time = now;
     s_settings_dirty = true;
+    taskEXIT_CRITICAL();
 }
 
 // Called by vial_eeprom_task in the USB task, before the keymap writer.
@@ -276,10 +342,17 @@ void hhkb_calibration_save_to_eeprom(void) {
 }
 
 void hhkb_calibration_load(void) {
+#if HHKB_RT_KEYMASK
+    rt_mask_init();
+#endif
     const volatile hhkb_eeprom_cal_t *cal = (const volatile hhkb_eeprom_cal_t *)USER_EEPROM_ADDR;
 #ifdef HHKB_COMPACT_STORAGE
     hhkb_eeprom_cal_t restored = {0};
     if (hhkb_compact_load_cal(&restored) || !hhkb_compact_legacy_allowed()) cal = &restored;
+#if HHKB_RT_KEYMASK
+    hhkb_rt_mask_t restored_mask;
+    if (hhkb_compact_load_mask(&restored_mask)) hhkb_rt_mask_restore(&restored_mask);
+#endif
 #endif
     for (uint8_t col = 0; col < MATRIX_COLS; ++col) {
         for (uint8_t row = 0; row < MATRIX_ROWS; ++row) {
@@ -363,16 +436,20 @@ void hhkb_calibration_load(void) {
 
 extern bool hhkb_compact_busy(void);
 bool vial_keyboard_eeprom_busy(void) {
-    return s_settings_dirty || hhkb_compact_busy();
+    taskENTER_CRITICAL();
+    bool dirty = s_settings_dirty;
+    taskEXIT_CRITICAL();
+    return dirty || hhkb_compact_busy();
 }
 
 void vial_keyboard_eeprom_task(void) {
-    if (!s_settings_dirty) return;
     TickType_t now = xTaskGetTickCount();
-    if ((now - s_settings_dirty_time) >= pdMS_TO_TICKS(HHKB_SETTINGS_SAVE_DELAY_MS)) {
-        taskENTER_CRITICAL();
-        s_settings_dirty = false;
-        taskEXIT_CRITICAL();
+    taskENTER_CRITICAL();
+    bool save = s_settings_dirty &&
+        (now - s_settings_dirty_time) >= pdMS_TO_TICKS(HHKB_SETTINGS_SAVE_DELAY_MS);
+    if (save) s_settings_dirty = false;
+    taskEXIT_CRITICAL();
+    if (save) {
         ec_curve_rebuild();
         hhkb_calibration_save_to_eeprom();
     }
@@ -786,6 +863,7 @@ void hhkb_get_cal_status_str(char *buf, size_t max_len) {
     dmk_snprintf(buf, max_len, "%u/%u saved custom ranges", custom_count, NUM_KEYS);
 }
 
+#endif // EC_SETTINGS_MASK_HOST_TEST
 rt_cfg_t hhkb_get_scan_cfg(void) {
     taskENTER_CRITICAL();
     rt_cfg_t cfg = s_rt_cfg;
@@ -798,6 +876,90 @@ rt_cfg_t hhkb_get_scan_cfg(void) {
     return cfg;
 }
 
+#if HHKB_RT_KEYMASK
+static void rt_mask_init(void) {
+    hhkb_rt_mask_default(&s_rt_mask);
+    s_rt_mask_revision = 0;
+    s_rt_mask_storage_event = false;
+}
+
+void hhkb_rt_mask_restore(const hhkb_rt_mask_t *mask) {
+    taskENTER_CRITICAL();
+    s_rt_mask = *mask;
+    taskEXIT_CRITICAL();
+}
+
+void hhkb_rt_mask_snapshot(hhkb_rt_mask_t *mask) {
+    taskENTER_CRITICAL();
+    *mask = s_rt_mask;
+    taskEXIT_CRITICAL();
+}
+
+bool hhkb_rt_mask_take_storage_event(void) {
+    taskENTER_CRITICAL();
+    bool event = s_rt_mask_storage_event;
+    s_rt_mask_storage_event = false;
+    taskEXIT_CRITICAL();
+    return event;
+}
+
+bool hhkb_rt_mask_storage_event_pending(void) {
+    taskENTER_CRITICAL();
+    bool event = s_rt_mask_storage_event;
+    taskEXIT_CRITICAL();
+    return event;
+}
+
+static void scan_cfgs_locked(rt_cfg_t *rt, rt_cfg_t *classic) {
+    *rt = s_rt_cfg;
+    *classic = s_rt_cfg;
+    classic->rt_enabled = false;
+    classic->release_pm = s_classic_release_pm;
+    if (!rt->rt_enabled) rt->release_pm = s_classic_release_pm;
+    else if (!s_custom_calibration) {
+        if (rt->press_pm < 100) rt->press_pm = 100;
+        if (rt->release_pm < 100) rt->release_pm = 100;
+    }
+}
+
+void hhkb_get_scan_cfgs(rt_cfg_t *rt, rt_cfg_t *classic) {
+    taskENTER_CRITICAL();
+    scan_cfgs_locked(rt, classic);
+    taskEXIT_CRITICAL();
+}
+
+bool hhkb_rt_key_get(unsigned index, bool *value) {
+    if (index >= HHKB_RT_MASK_BITS || !value) return false;
+    taskENTER_CRITICAL();
+    *value = hhkb_rt_mask_get(&s_rt_mask, index);
+    taskEXIT_CRITICAL();
+    return true;
+}
+
+hhkb_rt_mask_result_t hhkb_rt_key_set(unsigned index, unsigned value) {
+    if (index >= HHKB_RT_MASK_BITS || value > 1) return HHKB_RT_MASK_INVALID;
+    taskENTER_CRITICAL();
+    hhkb_rt_mask_result_t result = HHKB_RT_MASK_UNCHANGED;
+    if (hhkb_rt_mask_get(&s_rt_mask, index) != (value != 0)) {
+        (void)hhkb_rt_mask_set(&s_rt_mask, index, value);
+        ++s_rt_mask_revision;
+        s_rt_mask_storage_event = true;
+        result = HHKB_RT_MASK_CHANGED;
+    }
+    taskEXIT_CRITICAL();
+    return result;
+}
+
+void hhkb_get_scan_snapshot(hhkb_scan_snapshot_t *snapshot) {
+    taskENTER_CRITICAL();
+    scan_cfgs_locked(&snapshot->rt, &snapshot->classic);
+    snapshot->mask = s_rt_mask;
+    snapshot->revision = s_rt_mask_revision;
+    taskEXIT_CRITICAL();
+}
+#endif
+
+#ifndef EC_SETTINGS_MASK_HOST_TEST
 uint16_t hhkb_get_cal_baseline(uint8_t col, uint8_t row) { return s_cal_baseline[col][row]; }
 uint16_t hhkb_get_cal_peak(uint8_t col, uint8_t row) { return s_cal_peak[col][row]; }
 void hhkb_cal_accumulate_baseline(uint8_t col, uint8_t row, uint16_t val) {
@@ -856,5 +1018,4 @@ rt_key_t *hhkb_get_rt_key(uint8_t col, uint8_t row) { return &s_rt_keys[col][row
 uint8_t hhkb_get_effective_scan_rate(void) {
     return hhkb_get_scan_rate();
 }
-
-
+#endif

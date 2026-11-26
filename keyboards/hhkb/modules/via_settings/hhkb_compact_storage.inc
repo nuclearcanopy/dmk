@@ -16,6 +16,14 @@
 #define C_SLOT_BYTES 880U
 #define C_HEADER_BYTES 20U
 #define C_CAPACITY (C_SLOT_BYTES - C_HEADER_BYTES)
+#if HHKB_RT_KEYMASK
+#define C_TRAILER_BYTES 12U
+#else
+#define C_TRAILER_BYTES 0U
+#endif
+#ifndef HHKB_COMPACT_TEST_HOOK
+#define HHKB_COMPACT_TEST_HOOK(point) ((void)0)
+#endif
 #define C_MAGIC (0x33434d00U | NUM_KEYS)
 #define C_OWNER (0x33484b00U | NUM_KEYS)
 #define C_DONE 0x444f4e45U
@@ -38,6 +46,10 @@ static unsigned c_stage, c_copy_stage, c_cleanup;
 static uint32_t c_generation, c_flags;
 static hhkb_pack_state c_pack;
 static bool c_packing;
+static volatile bool c_mutation_event;
+#if HHKB_RT_KEYMASK
+static hhkb_rt_mask_t c_pack_mask;
+#endif
 _Static_assert(C_RAW_BYTES <= UINT16_MAX, "Compact codec indices must fit");
 static const char *c_status = "Not saved";
 #ifndef HHKB_EEPROM_LOG
@@ -211,6 +223,16 @@ bool hhkb_compact_load_cal(hhkb_eeprom_cal_t *cal) {
     c_decode_range(C_RAW_BYTES-C_CAL_BYTES,C_CAL_BYTES,packed);
     c_cal_unpack(packed,cal); c_cal=*cal; c_cal_ready=true; return true;
 }
+#if HHKB_RT_KEYMASK
+bool hhkb_compact_load_mask(hhkb_rt_mask_t *mask) {
+    c_init();
+    if (c_active < 0 || c_image[2] > C_CAPACITY - C_TRAILER_BYTES) return false;
+    const uint8_t *trailer = (const uint8_t *)c_image + C_SLOT_BYTES - C_TRAILER_BYTES;
+    if (memcmp(trailer, "RTM\1", 4)) return false;
+    memcpy(mask->bytes, trailer + 4, HHKB_RT_MASK_BYTES);
+    return hhkb_rt_mask_valid(mask);
+}
+#endif
 static bool c_cal_equal(const hhkb_eeprom_cal_t *cal) {
     /* CRC and empty cells are reconstructed, not calibration content. */
     if(memcmp(&c_cal,cal,6) || memcmp(&c_cal.rt,&cal->rt,
@@ -225,14 +247,32 @@ static bool c_cal_equal(const hhkb_eeprom_cal_t *cal) {
 void hhkb_compact_save_cal(const hhkb_eeprom_cal_t *cal) {
     HHKB_STORAGE_LOCK();
     if(!c_cal_ready || !c_cal_equal(cal)) {
-        c_cal=*cal; c_cal_ready=true; c_packing=false; c_pending=true; c_abandoned=false;
+        c_cal=*cal; c_cal_ready=true; if(c_target<0) c_packing=false; c_pending=true; c_abandoned=false;
         if(!c_blocked) c_status="Pending";
     }
     HHKB_STORAGE_UNLOCK();
 }
-/* Called at the mutation, not only after VIA's deferred save debounce. */
+/* Task-only publisher, never mutates USB-owned writer state. */
 void vial_keyboard_storage_changed(void) {
-    if(c_packing) { c_packing=false; c_pending=true; c_abandoned=false; }
+    taskENTER_CRITICAL();
+    c_mutation_event=true;
+    taskEXIT_CRITICAL();
+}
+static bool c_consume_events(void) {
+    taskENTER_CRITICAL();
+    bool changed=c_mutation_event;
+    c_mutation_event=false;
+    taskEXIT_CRITICAL();
+    HHKB_COMPACT_TEST_HOOK(after_event_take);
+#if HHKB_RT_KEYMASK
+    changed = hhkb_rt_mask_take_storage_event() || changed;
+#endif
+    if(changed) {
+        if(c_target<0) c_packing=false;
+        c_pending=true; c_abandoned=false;
+        if(!c_blocked) c_status="Pending";
+    }
+    return changed;
 }
 void vial_keyboard_keymap_load(void) {
     c_init();
@@ -243,7 +283,7 @@ void vial_keyboard_keymap_load(void) {
     } else if(hhkb_compact_legacy_allowed()) legacy_keymap_load();
     c_keymap_ready=true; if(c_active<0) c_pending=true;
 }
-void vial_keyboard_keymap_save(void) { c_packing=false; c_pending=true; c_abandoned=false; if(!c_blocked) c_status="Pending"; }
+void vial_keyboard_keymap_save(void) { if(c_target<0) c_packing=false; c_pending=true; c_abandoned=false; if(!c_blocked) c_status="Pending"; }
 static uint8_t c_input(size_t i, void *ctx) {
     (void)ctx;
     if(i<sizeof(dynamic_keymap)) {
@@ -277,14 +317,20 @@ static bool c_build(void) {
             }
         }
         memset(c_image,0,sizeof(c_image)); memset(&c_pack,0,sizeof(c_pack));
+#if HHKB_RT_KEYMASK
+        hhkb_rt_mask_snapshot(&c_pack_mask);
+#endif
         c_packing=true;
     }
     /* No task can change calibration while this bounded slice reads it.
      * IRQs stay enabled; USB gets control back after at most 512 reads. */
     HHKB_STORAGE_LOCK();
     int result=hhkb_pack_step(&c_pack,c_input,NULL,C_RAW_BYTES,
-                            (uint8_t *)&c_image[5],C_CAPACITY,512);
+                             (uint8_t *)&c_image[5],C_CAPACITY-C_TRAILER_BYTES,512);
     HHKB_STORAGE_UNLOCK();
+    HHKB_COMPACT_TEST_HOOK(after_pack_slice);
+    c_consume_events();
+    if(!c_packing) return false;
     if(!result) return false;
     c_packing=false;
     size_t size=result>0 ? c_pack.o : 0;
@@ -293,6 +339,14 @@ static bool c_build(void) {
         HHKB_EEPROM_LOG("save failed: full (%u B raw)", (unsigned)C_RAW_BYTES);
         return false;
     }
+#if HHKB_RT_KEYMASK
+    uint8_t *trailer=(uint8_t *)c_image+C_SLOT_BYTES-C_TRAILER_BYTES;
+    memcpy(trailer,"RTM\1",4);
+    memcpy(trailer+4,c_pack_mask.bytes,HHKB_RT_MASK_BYTES);
+#endif
+    HHKB_COMPACT_TEST_HOOK(before_final_consume);
+    if(c_consume_events()) return false;
+    HHKB_COMPACT_TEST_HOOK(after_final_consume);
     if(c_active>=0 && *c_word((unsigned)c_active,2)==size) {
         bool equal=true;
         for(unsigned i=5;i<C_SLOT_BYTES/4;++i) if(c_image[i]!=*c_word((unsigned)c_active,i)) { equal=false; break; }
@@ -345,13 +399,22 @@ bool vial_keyboard_keymap_reset(void) {
     return hhkb_compact_reset() && hhkb_storage_erase_early();
 }
 bool hhkb_compact_busy(void) {
-    if (c_blocked || c_abandoned || !c_keymap_ready || !c_cal_ready) return false;
+    taskENTER_CRITICAL();
+    bool event=c_mutation_event;
+    taskEXIT_CRITICAL();
+#if HHKB_RT_KEYMASK
+    event = event || hhkb_rt_mask_storage_event_pending();
+#endif
+    if (c_blocked || !c_keymap_ready || !c_cal_ready) return false;
+    if (event) return true;
+    if (c_abandoned) return false;
     return c_pending || c_packing || c_target >= 0 ||
         (c_active >= 0 && (*c_phys(0x1708) == 0 || *c_phys(0x1708) == C_RESET));
 }
 
 void vial_keyboard_keymap_poll(void) {
     c_init();
+    c_consume_events();
     if(c_blocked || c_abandoned || !c_keymap_ready || !c_cal_ready) return;
     if(c_active>=0 && *c_phys(0x1708)==C_RESET) {
         if(!write_word(c_phys(0x1708),0)) { c_write_failed("reset clear"); return; }

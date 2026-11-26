@@ -17,8 +17,9 @@ class CompactStorageTest(unittest.TestCase):
                             'platforms/stm32l072', 'keyboards/hhkb/modules/ec',
                             'keyboards/hhkb/modules/via_settings', 'dmk_core/features', 'dmk_core/include']:
                 command += ['-I', str(ROOT / include)]
-            subprocess.run(command + [str(ROOT/'tests/hhkb/test_compact_storage.c'), '-o', exe], check=True)
-            subprocess.run([exe], check=True)
+            for mask in (0, 1):
+                subprocess.run(command + [f'-DHHKB_RT_KEYMASK={mask}', str(ROOT/'tests/hhkb/test_compact_storage.c'), '-o', exe], check=True)
+                subprocess.run([exe], check=True)
             # Private same-board backup stays outside Git; validate it locally
             # when available without making CI depend on proprietary data.
             backup = ROOT / 'keyboards/hhkb/binaries/backups/hhkb-eeprom.bin'

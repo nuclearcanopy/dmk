@@ -29,6 +29,9 @@ bash tools/nxmk/check_image.sh              # size and vector gates
   [Config](config.md#build-definitions)).
 - `--build-dir PATH` changes the output directory (default
   `build/hhkb-script`); `-m` adds extra user module directories.
+- The script enables arbitrary RT key selection. Use `--legacy-rt` to leave
+  RT feature flags at their config defaults, or to supply fixed-seven
+  experimental flags explicitly with `-d`.
 
 Output: `build/hhkb-script/nxmk_hhkb_stm32l072.bin` (raw Bank 2 image) and the
 ELF of the same name. The Hybrid build does not produce an `.hfb`; package it
@@ -50,6 +53,8 @@ One local build of this tree on 2026-11-26 (commit 7f4e0805, Hybrid ANSI,
 `arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203`
 (the nix `gcc-arm-embedded` package, **not** the pinned 15.3.Rel2). The `.bin`
 sha256 is `6358ddabfdfb0fafa8d52bbc1e0cf008ec4029ca2d6e8be731128e2f3725beca`.
+That historical command predates the personal RT selection defaults. Use
+`--legacy-rt` for compatible feature flags when reproducing it.
 
 `arm-none-eabi-size` (Berkeley format) on the ELF, and the `.bin` size:
 

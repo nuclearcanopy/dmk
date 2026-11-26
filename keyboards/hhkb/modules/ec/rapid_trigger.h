@@ -59,6 +59,9 @@ typedef struct {
 } rt_scan_cfg_t;
 typedef struct {
     uint16_t press_raw, release_raw, last_raw; // RT uses release_raw as the first raw above reset.
+#if HHKB_RT_KEYMASK
+    uint8_t rt_member;
+#endif
 } rt_raw_cache_t;
 extern uint32_t rt_range_revision;
 void rt_prepare_scan(rt_scan_cfg_t *scan, const rt_cfg_t *cfg, const uint16_t *curve);
@@ -67,6 +70,11 @@ uint16_t rt_scan_normalize(const rt_key_t *key, uint16_t raw, const rt_scan_cfg_
 bool rt_update_scan_travel(rt_key_t *key, const rt_scan_cfg_t *scan, uint16_t travel);
 bool rt_update_scan_sample(rt_key_t *key, const rt_scan_cfg_t *scan, uint16_t raw, uint16_t *travel);
 bool rt_update_scan_cached_slow(rt_key_t *key, const rt_scan_cfg_t *scan, uint16_t raw, uint16_t *travel);
+#if HHKB_RT_DEADBAND
+#include "rt_noise.h"
+bool rt_update_scan_sample_db(rt_key_t *key, rt_noise_t *noise, const rt_scan_cfg_t *scan,
+                              uint16_t raw, uint16_t *travel, bool cached);
+#endif
 
 static inline __attribute__((always_inline))
 bool rt_update_scan_cached(rt_key_t *key, const rt_raw_cache_t *cache, const rt_scan_cfg_t *scan, uint16_t raw, uint16_t *travel) {

@@ -31,6 +31,11 @@ stall_diag_t g_stall;
 
 static matrix_row_t s_matrix_state[MATRIX_ROWS] = {0};
 static TaskHandle_t s_matrix_task;
+#if HHKB_RT_DEADBAND
+uint32_t hhkb_matrix_stack_hwm(void) {
+    return s_matrix_task ? uxTaskGetStackHighWaterMark(s_matrix_task) : 0;
+}
+#endif
 static volatile uint16_t s_scan_period_ticks;
 static volatile uint8_t s_scan_divider;
 static uint8_t s_scan_phase;

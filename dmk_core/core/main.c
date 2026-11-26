@@ -18,6 +18,10 @@
 #include "task_internal.h"
 #include "usb.h"
 
+#if defined(VIAL) && defined(HHKB_COMPACT_STORAGE)
+#include "vial.h"
+#endif
+
 #ifndef __NOP
 #define __NOP() __asm__ volatile("nop")
 #endif
@@ -50,6 +54,11 @@ int main(void) {
 
     // Initialize board indicator and lock LEDs
     led_init();
+
+#if defined(VIAL) && defined(HHKB_COMPACT_STORAGE)
+    // Load persisted state before USB can accept a Vial request.
+    vial_init();
+#endif
 
     // Initialize USB HID / MIDI hardware and endpoints
     usb_init();

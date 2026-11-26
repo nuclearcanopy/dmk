@@ -29,7 +29,9 @@ typedef unsigned TickType_t;
 #define pdMS_TO_TICKS(x) (x)
 #define VIA_FULL_SETTINGS_RESET
 #define C_RESET 42
-static bool s_reset_pending,s_eeprom_dirty,s_settings_dirty,c_pending,c_packing;
+#define taskENTER_CRITICAL() ((void)0)
+#define taskEXIT_CRITICAL() ((void)0)
+static bool s_reset_pending,s_eeprom_dirty,s_settings_dirty,c_pending,c_packing,c_mutation_event;
 static int c_target=-1,c_active=-1;
 static bool c_abandoned,c_blocked,c_keymap_ready=true,c_cal_ready=true;
 static uint32_t owner=1;

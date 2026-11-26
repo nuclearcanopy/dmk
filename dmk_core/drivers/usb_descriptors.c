@@ -414,6 +414,11 @@ __attribute__((weak)) void hhkb_get_scan_diagnostics(uint32_t *scan_us, uint32_t
     if (q_full) *q_full = 0;
 }
 __attribute__((weak)) void hhkb_reset_scan_diagnostics_peaks(void) {}
+#if HHKB_RT_DEADBAND
+void hhkb_get_noise_diag(uint8_t slot, uint8_t *col, uint8_t *row,
+                         uint16_t *noise, uint16_t *db, uint16_t *press, uint16_t *release);
+uint32_t hhkb_matrix_stack_hwm(void);
+#endif
 __attribute__((weak)) void hhkb_get_rt_rebuild(uint32_t *ms, uint32_t *count) {
     if (ms) *ms = 0;
     if (count) *count = 0;
@@ -481,6 +486,17 @@ void vial_diag_task(void) {
         }
 
         if (hhkb_get_debug_flag(1U << 2)) { // DEBUG_FLAG_RATE
+#if HHKB_RT_DEADBAND
+            {
+                static uint8_t slot;
+                uint8_t col, row;
+                uint16_t noise, db, press, release;
+                hhkb_get_noise_diag(slot, &col, &row, &noise, &db, &press, &release);
+                slot = (slot + 1) % 7;
+                debug_console_printf("[NOISE] R%uC%u n_q8=%u db=%u eff=%u/%u stk=%lu\r\n",
+                    row, col, noise, db, press, release, (unsigned long)hhkb_matrix_stack_hwm());
+            }
+#endif
 #ifdef HHKB_SCAN_DIAGNOSTICS
             uint32_t scan_us = 0, scan_max_us = 0, work_max_us = 0, missed = 0, q_full = 0;
             hhkb_get_scan_diagnostics(&scan_us, &scan_max_us, &work_max_us, &missed, &q_full);

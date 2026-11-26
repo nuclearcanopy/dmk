@@ -26,10 +26,31 @@ static bool inject_write(volatile uint32_t *p,uint32_t v) {
 #define HHKB_EEPROM_LOG(...) do { if(strstr(#__VA_ARGS__,"giving up")) ++giveups; } while(0)
 #define HHKB_STORAGE_LOCK() ((void)0)
 #define HHKB_STORAGE_UNLOCK() ((void)0)
+#define taskENTER_CRITICAL() ((void)0)
+#define taskEXIT_CRITICAL() ((void)0)
 #define HHKB_EEPROM_WRITE inject_write
 #define HHKB_EEPROM_BASE ((uintptr_t)memory)
 #define SLOT_ADDRESS ((uintptr_t)&memory[0x600/4])
+#if HHKB_RT_KEYMASK
+static hhkb_rt_mask_t test_mask;
+static bool mask_event;
+bool hhkb_rt_mask_take_storage_event(void) { bool e=mask_event; mask_event=false; return e; }
+bool hhkb_rt_mask_storage_event_pending(void) { return mask_event; }
+void hhkb_rt_mask_snapshot(hhkb_rt_mask_t *mask) { *mask=test_mask; }
+#endif
+static void test_hook(const char *point);
+#define HHKB_COMPACT_TEST_HOOK(point) test_hook(#point)
 #include "../../keyboards/hhkb/modules/via_settings/hhkb_keymap_storage.c"
+static const char *hook_point;
+static unsigned hook_kind;
+static void test_hook(const char *point) {
+    if (!hook_point || strcmp(point,hook_point)) return;
+    hook_point=NULL;
+    if(hook_kind==1) { dynamic_keymap[0][0]=99; vial_keyboard_storage_changed(); }
+#if HHKB_RT_KEYMASK
+    if(hook_kind==2) { hhkb_rt_mask_set(&test_mask,59,1); mask_event=true; }
+#endif
+}
 static hhkb_eeprom_cal_t cal;
 static unsigned reader_calls;
 static uint8_t counted_read(size_t i,void *ctx) { ++reader_calls; return ((uint8_t *)ctx)[i]; }
@@ -50,12 +71,20 @@ static void reboot(void) {
     c_initialized=c_keymap_ready=c_cal_ready=c_pending=c_blocked=c_packing=false;
     c_active=c_target=c_copy=-1; c_stage=c_copy_stage=c_cleanup=0;
     c_generation=c_flags=0; c_abandoned=false; c_fails=0; c_status="Not saved";
+    c_mutation_event=false; hook_point=NULL;
+#if HHKB_RT_KEYMASK
+    mask_event=false; hhkb_rt_mask_default(&test_mask);
+#endif
     active_slot=target_slot=-1; generation=stage=0; pending=false;
     defaults();
     if(!hhkb_compact_load_cal(&cal) && hhkb_compact_legacy_allowed()) {
         hhkb_eeprom_cal_t *old=(void *)&memory[0x1500/4];
         if(old->magic==USER_EEPROM_MAGIC) cal=*old;
     }
+#if HHKB_RT_KEYMASK
+    hhkb_rt_mask_t restored;
+    if(hhkb_compact_load_mask(&restored)) test_mask=restored;
+#endif
     vial_keyboard_keymap_load(); hhkb_compact_save_cal(&cal);
 }
 static void poll(void) { for(unsigned i=0;i<2500;++i) vial_keyboard_keymap_poll(); }
@@ -77,6 +106,34 @@ int main(int argc, char **argv) {
         assert(!memcmp(original,memory,sizeof(memory)));
         puts("stock EEPROM backup preserved byte-for-byte");return 0;
     }
+    /* Neither half of startup may enroll or commit a snapshot on its own. */
+    fresh();
+    memset(memory, 0, sizeof(memory));
+    c_initialized=c_keymap_ready=c_cal_ready=c_pending=false;
+    c_active=c_target=-1;
+    defaults();
+    hhkb_compact_save_cal(&cal);
+    unsigned startup_writes=writes;
+    poll();
+    assert(writes==startup_writes);
+    vial_keyboard_keymap_load();
+    poll();
+    assert(writes>startup_writes && c_active>=0);
+    reboot();
+    assert(c_cal_ready && c_keymap_ready && dynamic_keymap[0][0]==4);
+
+    memset(memory, 0, sizeof(memory));
+    c_initialized=c_keymap_ready=c_cal_ready=c_pending=false;
+    c_active=c_target=-1;
+    defaults();
+    vial_keyboard_keymap_load();
+    startup_writes=writes;
+    poll();
+    assert(writes==startup_writes);
+    hhkb_compact_save_cal(&cal);
+    poll();
+    assert(writes>startup_writes && c_active>=0);
+
     assert(hhkb_storage_crc16((const uint8_t *)"123456789",9)==0x29b1);
     uint8_t input[2000],encoded[2100],decoded[2000];
     uint32_t seed=7;
@@ -117,6 +174,44 @@ int main(int argc, char **argv) {
     unsigned packed=*c_word(0,2);printf("%u keys: %u/%u compressed bytes\n",NUM_KEYS,packed,(unsigned)C_RAW_BYTES);
     assert(packed<=C_CAPACITY);
     unsigned before=writes;reboot();assert(!c_pending && !c_packing);poll();assert(writes==before); /* no boot wear */
+#if HHKB_RT_KEYMASK
+    hhkb_rt_mask_t expected; hhkb_rt_mask_default(&expected);
+    assert(hhkb_rt_mask_equal(&expected,&test_mask));
+    hook_point="after_pack_slice"; hook_kind=2;
+    vial_keyboard_keymap_save(); vial_keyboard_keymap_poll();
+    assert(c_pending && !c_packing);
+    poll(); reboot(); assert(hhkb_rt_mask_get(&test_mask,59));
+    hhkb_rt_mask_set(&test_mask,59,0); mask_event=true; poll();
+    hook_point="after_final_consume"; hook_kind=2;
+    dynamic_keymap[0][0]=42; vial_keyboard_storage_changed();
+    while(c_target<0) vial_keyboard_keymap_poll();
+    assert(mask_event); poll(); reboot();
+    assert(dynamic_keymap[0][0]==42 && hhkb_rt_mask_get(&test_mask,59));
+    dynamic_keymap[0][0]=4; hhkb_rt_mask_set(&test_mask,59,0);
+    mask_event=true; vial_keyboard_storage_changed(); poll(); reboot();
+    dynamic_keymap[0][0]=43; vial_keyboard_storage_changed();
+    while(c_target<0) vial_keyboard_keymap_poll();
+    uint32_t immutable[C_SLOT_BYTES/4]; memcpy(immutable,c_image,sizeof(immutable));
+    dynamic_keymap[0][0]=44; vial_keyboard_storage_changed();
+    hhkb_rt_mask_set(&test_mask,59,1); mask_event=true;
+    vial_keyboard_keymap_poll();
+    assert(c_pending && !memcmp(immutable,c_image,sizeof(immutable)));
+    poll(); reboot();
+    assert(dynamic_keymap[0][0]==44 && hhkb_rt_mask_get(&test_mask,59));
+    dynamic_keymap[0][0]=4; hhkb_rt_mask_set(&test_mask,59,0);
+    mask_event=true; vial_keyboard_storage_changed(); poll(); reboot();
+#endif
+    hook_point="after_event_take"; hook_kind=1;
+    vial_keyboard_storage_changed(); c_consume_events();
+    assert(c_mutation_event);
+    poll(); reboot(); assert(dynamic_keymap[0][0]==99);
+    dynamic_keymap[0][0]=4; vial_keyboard_storage_changed(); poll(); reboot();
+    dynamic_keymap[0][0]=41; vial_keyboard_storage_changed();
+    hook_point="before_final_consume"; hook_kind=1;
+    while(hook_point) vial_keyboard_keymap_poll();
+    assert(c_pending && !c_packing && c_target<0);
+    poll(); reboot(); assert(dynamic_keymap[0][0]==99);
+    dynamic_keymap[0][0]=4; vial_keyboard_storage_changed(); poll(); reboot();
     assert(cal.led_mode[0]==0xa1 && cal.led_mode[1]==0xf4 && cal.reserved[1]==0xf3);
     for(unsigned i=0;i<NUM_KEYS;++i) assert(cal.baseline[c_positions[i][1]][c_positions[i][0]]==300+i);
     /* Empty matrix cells and the reconstructed CRC must not cause a boot save. */
@@ -147,7 +242,8 @@ int main(int argc, char **argv) {
     memcpy(memory,saved,sizeof(saved));budget=-1;reboot();poll();
     dynamic_keymap[0][0]=77;vial_keyboard_keymap_save();vial_keyboard_keymap_poll();
     assert(c_packing && hhkb_compact_busy());
-    dynamic_keymap[0][0]=88;vial_keyboard_storage_changed();assert(!c_packing && c_pending);
+    dynamic_keymap[0][0]=88;vial_keyboard_storage_changed();assert(c_packing);
+    c_consume_events();assert(!c_packing && c_pending);
     vial_keyboard_keymap_save();poll();reboot();assert(dynamic_keymap[0][0]==88);
     /* Incompressible data must fail explicitly, without destroying the old record. */
     unsigned rng=123;
@@ -290,5 +386,43 @@ int main(int argc, char **argv) {
     attempts=0;failures_left=C_RETRY_MAX-1;poll();
     assert(giveups==1 && !hhkb_compact_busy() && !strcmp(c_status,"Saved (compressed)"));
     reboot();assert(dynamic_keymap[0][0]==0x5153);
+    /* The existing reader accepts hashed data after the declared compressed
+     * stream. Its writer clears that tail on the next changed snapshot. */
+    fresh();poll();
+    int extended=c_active;
+    assert(*c_word(extended,2) <= C_CAPACITY-12);
+    assert(c_read(extended));
+    c_image[C_SLOT_BYTES/4-3]=0x31544d52;
+    c_image[C_SLOT_BYTES/4-2]=0x12345678;
+    c_image[C_SLOT_BYTES/4-1]=0x01234567;
+    c_image[3]=c_hash(c_image);
+    for(unsigned i=C_SLOT_BYTES/4-3;i<C_SLOT_BYTES/4;++i)
+        *c_word(extended,i)=c_image[i];
+    *c_word(extended,3)=c_image[3];
+    reboot();assert(c_active==extended && dynamic_keymap[0][0]==4);
+#if HHKB_RT_KEYMASK
+    hhkb_rt_mask_t trailer_mask;
+    assert(!hhkb_compact_load_mask(&trailer_mask)); /* Unknown trailer version. */
+    c_image[C_SLOT_BYTES/4-3]=0x014d5452;
+    c_image[C_SLOT_BYTES/4-1]=0xf1234567;
+    c_image[3]=c_hash(c_image);
+    for(unsigned i=C_SLOT_BYTES/4-3;i<C_SLOT_BYTES/4;++i)
+        *c_word(extended,i)=c_image[i];
+    *c_word(extended,3)=c_image[3];
+    reboot(); assert(!hhkb_compact_load_mask(&trailer_mask)); /* Reserved bits. */
+#endif
+    *c_word(extended,C_SLOT_BYTES/4-1)^=1;
+    assert(!c_read(extended)); /* The otherwise-unused tail is authenticated. */
+    *c_word(extended,C_SLOT_BYTES/4-1)^=1;
+    assert(c_read(extended));
+    dynamic_keymap[0][0]=0x6161;vial_keyboard_keymap_save();poll();
+    assert(c_active!=extended);
+#if HHKB_RT_KEYMASK
+    assert(*c_word(c_active,C_SLOT_BYTES/4-3)==0x014d5452);
+#else
+    for(unsigned i=C_SLOT_BYTES/4-3;i<C_SLOT_BYTES/4;++i)
+        assert(*c_word(c_active,i)==0);
+#endif
+    reboot();assert(dynamic_keymap[0][0]==0x6161);
     puts("compact EEPROM transactions and early recovery reset passed");
 }

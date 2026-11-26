@@ -3,6 +3,9 @@
 
 #include "config.h"
 #include "rapid_trigger.h"
+#if HHKB_RT_KEYMASK
+#include "rt_keymask.h"
+#endif
 #include "ec_curve.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -118,6 +121,28 @@ extern rt_key_t s_rt_keys[MATRIX_COLS][MATRIX_ROWS];
 
 // Matrix accessors for scan module
 rt_cfg_t hhkb_get_scan_cfg(void);
+#if HHKB_RT_KEYMASK
+void hhkb_get_scan_cfgs(rt_cfg_t *rt, rt_cfg_t *classic);
+typedef enum {
+    HHKB_RT_MASK_INVALID,
+    HHKB_RT_MASK_UNCHANGED,
+    HHKB_RT_MASK_CHANGED,
+} hhkb_rt_mask_result_t;
+typedef struct {
+    rt_cfg_t rt, classic;
+    hhkb_rt_mask_t mask;
+    uint32_t revision;
+} hhkb_scan_snapshot_t;
+// Task context only.
+// Revision is a wrapping change token: consumers compare it for inequality.
+bool hhkb_rt_key_get(unsigned index, bool *value);
+hhkb_rt_mask_result_t hhkb_rt_key_set(unsigned index, unsigned value);
+void hhkb_get_scan_snapshot(hhkb_scan_snapshot_t *snapshot);
+bool hhkb_rt_mask_take_storage_event(void);
+bool hhkb_rt_mask_storage_event_pending(void);
+void hhkb_rt_mask_snapshot(hhkb_rt_mask_t *mask);
+void hhkb_rt_mask_restore(const hhkb_rt_mask_t *mask);
+#endif
 uint16_t hhkb_get_cal_baseline(uint8_t col, uint8_t row);
 uint16_t hhkb_get_cal_peak(uint8_t col, uint8_t row);
 void hhkb_cal_accumulate_baseline(uint8_t col, uint8_t row, uint16_t val);

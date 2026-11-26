@@ -112,7 +112,7 @@ void keyboard_init(void) {
     gamepad_init();
     memset(s_active_keys, 0, sizeof(s_active_keys));
 
-#ifdef VIAL
+#if defined(VIAL) && !defined(HHKB_COMPACT_STORAGE)
     vial_init();
 #endif
     keyboard_platform_init();

@@ -26,6 +26,8 @@ class ResetScenariosTest(unittest.TestCase):
 #define VIA_CUSTOM_GET_VALUE 8
 #define VIA_CUSTOM_SET_VALUE 7
 #define pdMS_TO_TICKS(ms) (ms)
+#define taskENTER_CRITICAL() ((void)0)
+#define taskEXIT_CRITICAL() ((void)0)
 typedef unsigned TickType_t;
 static unsigned ticks, settings_erases, keymap_erases, resets, recoveries;
 static bool allowed=true, erase_ok=true, s_eeprom_dirty;

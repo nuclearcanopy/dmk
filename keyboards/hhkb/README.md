@@ -46,6 +46,30 @@ and is licensed AGPL-3.0-or-later (see [NOTICE.md](../../NOTICE.md)).
 - `modules/grave_escape/`, `modules/dip_switch/`.
 - `via.json`, `vial.json`: definitions (generated parts come from `config.h`).
 
+## Rapid Trigger selection
+
+The personal `build_all.sh -d HHKB_HYBRID` build enables arbitrary physical
+key selection with `HHKB_RT_KEYMASK=1` and `HHKB_RT_ARBITRARY_SELECTION=1`.
+Use `--legacy-rt` for config defaults, which leave both features off. Arbitrary
+selection does not support the fixed-seven deadband modes.
+
+Builds with `HHKB_RT_KEYMASK=1` default VIA Rapid Trigger (ID 3) to the
+physical W, A, S, D, Space, left Shift and left Ctrl positions of the default
+ANSI layout. With `HHKB_RT_ARBITRARY_SELECTION=1`, the VIA Rapid Trigger
+settings also select any physical positions independently of the master toggle.
+Selections are persisted in the compact EEPROM snapshot.
+Unselected keys retain fixed actuation and classic release hysteresis. With the
+mask flag off, the original global behavior is unchanged.
+
+Experimental builds may add `HHKB_RT_OVERSAMPLE=2` at 1 kHz and/or
+`HHKB_RT_DEADBAND=1` (applied) or `=2` (measurement only). Both require the
+mask. The noise estimator needs time to warm up and cannot detect baseline
+drift. Calibration sag must be fixed and validated before using the applied
+deadband normally or claiming safety below 0.5 mm. Permille values represent
+calibrated signal travel, not independently measured physical millimeters.
+In deadband builds, scan-rate debug output rotates through the seven noise
+measurements.
+
 ## DIP switches
 
 All six DIP switches are read (`HHKB_DIP_PINS` in `config.h`). SW6 (with SW5)

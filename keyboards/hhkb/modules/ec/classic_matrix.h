@@ -16,6 +16,11 @@ extern "C" {
 
 void hhkb_matrix_hardware_init(void);
 bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]);
+#if HHKB_RT_DEADBAND
+void hhkb_get_noise_diag(uint8_t slot, uint8_t *col, uint8_t *row,
+                         uint16_t *noise, uint16_t *db, uint16_t *press, uint16_t *release);
+uint32_t hhkb_matrix_stack_hwm(void);
+#endif
 #ifdef HHKB_SCAN_DIAGNOSTICS
 void hhkb_get_scan_diagnostics(uint32_t *scan_us, uint32_t *scan_max_us, uint32_t *work_max_us, uint32_t *missed, uint32_t *q_full);
 void hhkb_reset_scan_diagnostics_peaks(void);

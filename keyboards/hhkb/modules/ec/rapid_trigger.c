@@ -181,6 +181,33 @@ RT_SCAN_CODE(rt_update_scan_cached_slow) bool rt_update_scan_cached_slow(rt_key_
     return update_rt_travel(key, &scan->cfg, (int16_t)value, bottom);
 }
 
+#if HHKB_RT_DEADBAND
+RT_SCAN_CODE(rt_update_scan_sample_db) bool rt_update_scan_sample_db(rt_key_t *key,
+        rt_noise_t *noise, const rt_scan_cfg_t *scan, uint16_t raw, uint16_t *travel, bool cached) {
+    uint16_t value = scan_normalize(key, raw, scan);
+    if (travel) *travel = value;
+    uint16_t bottom = scan->curve ? scan->curve[125] : RT_FULL_SCALE;
+    if (value > bottom) value = bottom;
+    if (value <= scan->cfg.reset_pm) {
+        noise->hist = 0;
+        key->down = false;
+        key->latched = false;
+        key->ext = cached ? 0 : value;
+        return false;
+    }
+    rt_noise_feed(noise, value, key->latched);
+#if HHKB_RT_DEADBAND == 1
+    rt_cfg_t cfg = scan->cfg;
+    uint16_t db = rt_noise_db_pm(noise);
+    if (cfg.press_pm < db) cfg.press_pm = db;
+    if (cfg.release_pm < db) cfg.release_pm = db;
+    return update_rt_travel(key, &cfg, value, bottom);
+#else
+    return update_rt_travel(key, &scan->cfg, value, bottom);
+#endif
+}
+#endif
+
 bool rt_update_curve(rt_key_t *key, const rt_cfg_t *cfg, uint16_t raw, const uint16_t *curve) {
     rt_scan_cfg_t scan;
     rt_prepare_scan(&scan, cfg, curve);
