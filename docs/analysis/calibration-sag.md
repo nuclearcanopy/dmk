@@ -122,7 +122,7 @@ pressed through travel and this is exactly the failure.
 | 2 | Averaging includes a settle transient after start (no discard window) | code-supported, speculative | Same `[EC]` raw trace, or fire VIA 25 (`DEBUG_FLAG_CAL`) and compare the `base=` printed at the first press of each key (`ec_settings.c:822-824`) with `raw=` at rest 1 s later. A repeat with the keyboard idle for 2 s then start vs. start immediately after USB traffic separates settle from regime |
 | 3 | Sensor-board/OpAmp power restore after sleep (10 ms wait only, `matrix.c:187-197`) or other analog warm-up | speculative | Start calibration immediately after USB resume, vs. 10 s after |
 | 4 | Oversampling toggle/ADC re-enable within the capture window (`classic_matrix.c:171-196`) | speculative (low) | VIA 18 readback; does the sag disappear with oversampling off and rate 4? |
-| 5 | Save in flight at start stalls flash fetch (`ec_settings.c:195-266`) | speculative (low) | Enable `DEBUG_FLAG_EEPROM` (0x20) and correlate its `[EEPROM] settings saved`; correlate its timestamp with the start request. Skip the 500 ms wait before start: sag unchanged ⇒ rule out |
+| 5 | Save in flight at start stalls flash fetch (`ec_settings.c:195-266`) | speculative (low) | Enable `DEBUG_FLAG_EEPROM` (0x20); correlate the `[EEPROM] settings saved` timestamp with the start request. Skip the 500 ms wait before start: sag unchanged ⇒ rule out |
 
 The first raw trace to take: record raw for one key at rest across `start → +100 ms → finish → +1 s`.
 There is no direct raw-sample stream during capture other than `[EC] raw=` at 50 Hz (20 ms
