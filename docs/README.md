@@ -1,4 +1,5 @@
-# DMK Documentation / Документация DMK
+# Documentation
 
-- 🇷🇺 **[Русский (Russian)](ru/README.md)**
-- 🇬🇧 **[English](en/README.md)**
+- [HHKB Hybrid docs](../keyboards/hhkb/README.md)
+- [Keycodes](en/keycodes.md)
+- [Hardware test checklist](en/tests.md)

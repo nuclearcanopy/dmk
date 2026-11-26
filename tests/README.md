@@ -1,6 +1,6 @@
 # Host regression tests
 
-From the repository root, install Clang, Python through `uv`, and Node.js, then run:
+From the repository root, install Clang and Python through `uv`, then run:
 
 ```bash
 uv --version
@@ -18,10 +18,8 @@ The runtime runner uses a unique temporary directory and removes its binaries on
 
 Runtime coverage includes shared 6KRO key ownership, slot reuse, HT behavior, independent momentary/persistent layers, 20,000 deterministic model-based layer operations, One-Shot retapping, repeated lazy modifier activation, tick rollover and tracker exhaustion. HHKB tests additionally exercise calibration, ANSI/JIS EEPROM persistence and interrupted writes, scan processing, power/button/radio state machines, VIA controls, and Grave Escape modifier/override combinations and release ordering.
 
-The separate **Core and HHKB Tests** workflow runs the full suite on Linux and the sanitizer tests on Linux and macOS. It runs for relevant pushes and pull requests, and can be started from **Actions → Core and HHKB Tests → Run workflow**, selecting `dev`. Each job uploads its log, including on failure.
+The **Core and HHKB Tests** workflow runs the full suite on Linux and the sanitizer tests on Linux and macOS. It runs for relevant pushes and pull requests, and can be started from **Actions → Core and HHKB Tests → Run workflow**, selecting `dev`. Each job uploads its log, including on failure.
 
 These are host tests with simulated peripheral inputs. They do not establish ADC settling, USB/Bluetooth latency, physical wake behavior, or current consumption. Firmware builds and hardware measurements remain separate checks.
 
 Physical validation is tracked separately in the [hardware checklist](../docs/en/tests.md).
-
-External-platform selection tests are included in the host suite. To also clone the fixture config repository and compile its ARM firmware, run `DMK_TEST_EXTERNAL_ARM=1 uv run python3 -m unittest tests.test_external_platform` with Arm GCC/newlib and initialized SDK submodules. The dedicated CI external-platform job performs this build.

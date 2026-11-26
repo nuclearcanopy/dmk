@@ -1,125 +1,24 @@
-**Language / Язык:** [English](README.md) | [Русский](README_ru.md)
+# nxmk
 
----
+nxmk is a radio-free, HHKB Hybrid (ANSI, STM32L072) only derivative of
+[DMK](https://github.com/aroum/dmk). It builds one firmware image and carries
+no other MCU platforms, keyboards or Bluetooth code. Licensing: see
+[NOTICE.md](NOTICE.md) and [THIRD_PARTY.md](THIRD_PARTY.md).
 
-# nxmk (DMK fork: HHKB Hybrid, no Bluetooth)
-
-> nxmk is a derivative of [DMK](https://github.com/aroum/dmk) (MIT) that builds only
-> the HHKB Hybrid (ANSI) firmware with all Bluetooth code removed. See [NOTICE.md](NOTICE.md).
-> Build: `./build_all.sh -b hhkb -d HHKB_HYBRID -c`, then `bash tools/nxmk/check_image.sh`.
-> The text below is the unmodified upstream README.
-
-# DMK Firmware
-
-![logo](logo.png)
-
-A lightweight, modern, and highly modular keyboard firmware designed for cross-platform MCU compatibility.
-
-**Documentation:** [Build](docs/en/build.md) • [Config](docs/en/config.md) • [Keycodes](docs/en/keycodes.md) • [Keymap](docs/en/keymap.md) • [Pins](docs/en/pins.md) • [Vial](docs/en/vial.md) • [Modules](docs/en/modules.md) • [MIDI](docs/en/midi.md) • [Config Wizard](https://htmlpreview.github.io/?https://github.com/aroum/dmk/blob/main/editor/wizard.html)
-
-## Features
-
-### Hardware & Platform Support
-
-- **Cross-MCU Architecture**: Single unified core codebase supporting multiple microcontrollers:
-  - **Milandr** (K1986BE92FI)
-  - **Raspberry Pi RP2040 / RP2350**
-  - **Nordic Semiconductor nRF52840**
-  - **Baikal** (BE-U1000)
-  - **STM32L072**
-- **External Modules & Extensions**: Flexible peripheral and driver architecture via CMake `-DDMK_MODULES` and lifecycle hooks (`hooks.h`) without modifying core code.
-- **Split Keyboard Support**: Hardware and software (bit-bang/UART) split communication between halves.
-- **6KRO (6-Key Roll Over)**: Reliable USB HID reporting allowing up to 6 concurrent keypresses plus modifiers.
-- **FreeRTOS Integration**: Built on top of FreeRTOS for preemptive multi-tasking, reliable scanning, and clean event-driven queues.
-
-### Advanced Layout & Keymap Features
-
-| Feature                   | Code / Macro                      | Description                                                                                          |
-| :------------------------ | :-------------------------------- | :--------------------------------------------------------------------------------------------------- |
-| **Nested Layers**         | `K_TRNS`, `0..15`                 | Up to 16 active stacked layers with transparent fallback resolution                                  |
-| **Momentary Switch**      | `MO(layer)`, `L_0..L_15`          | Activates a layer while held down                                                                    |
-| **Layer Toggle**          | `TG(layer)`                       | Toggles a layer state on or off                                                                      |
-| **One-Shot (Sticky)**     | `OS(K_LSFT)`, `OS(layer)`         | Activates a modifier or layer for the next single keypress                                           |
-| **Hold-Tap**              | `HT(hold, tap)`                   | Sends one keycode on quick tap and another (or layer/mod) on hold                                    |
-| **Modified Key**          | `MK(mod, key)`                    | Sends a keycode combined with a modifier mask (e.g., `Shift + D`)                                    |
-| **Physical Chords**       | `my_chords[]`                     | Triggers custom macros/actions when multiple keys are pressed together                               |
-| **Multi-Step Macros**     | `M(index)`                        | Executes sequences of key-down, key-up, and precise millisecond delays                               |
-| **Layer & Language Sync** | `M(index)` + `TG(layer)`          | Macros can trigger OS language hotkeys (`Shift+Alt`) and toggle layers for separate language keymaps |
-| **Mouse Keys**            | `MS_UP`, `MS_BTN1`..              | Full mouse cursor movement, button clicks, and scrolling from keys or modules                        |
-| **DirectInput Gamepad**   | `GP_A`, `GP_UP`, `GP_BTN`         | 32 buttons, 8-directional D-Pad, and 6 analog axes mapped to keys or modules                         |
-| **Vial & VIA Support**    | `#define VIAL` / `#define VIA_V3` | Real-time layout editing via Vial GUI (protocol 9) or VIA v3 Custom UI (protocol 12)                 |
-
----
-
-## Codebase Size Comparison
-
-DMK is not the most feature-rich firmware, and that is an intentional decision. The project does not aim to fully replicate all the functionality of QMK/ZMK/TMK/RMK/KMK, where the codebase size has grown significantly due to an excess of rarely used features.
-
-DMK focuses on a limited set of features that is sufficient for 99% of users. At the same time, thanks to the simplicity and transparency of the code, any missing functionality can easily be added independently.
-
-Thanks to this approach, support for new microcontrollers can be added very quickly and easily (the main requirement is FreeRTOS support). For example, support for Milandr and Baikal MCUs was added.
-
-Below is a comparison of the codebase size of DMK and other firmwares. Measured in source lines of code (SLOC) — only `.c`, `.h`, `.cpp`, `.rs` files are included; documentation, configs, third-party libraries, and auto-generated files are excluded.
-
-| Project                                                | Language | SLOC   | Relative to DMK |
-| :----------------------------------------------------- | :------- | :----- | :-------------- |
-| **DMK** (~7.7K core + ~1.7K platforms)                 | C        | ~9.3K  | 1×              |
-| [ZMK](https://github.com/zmkfirmware/zmk) (app)        | C        | ~24.5K | 2.6×            |
-| [TMK](https://github.com/tmk/tmk_keyboard) (tmk\_core) | C        | ~33K   | 3.5×            |
-| [RMK](https://github.com/HaoboGu/rmk)                  | Rust     | ~54K   | 5.8×            |
-| [QMK / Vial-QMK](https://github.com/vial-kb/vial-qmk)  | C        | ~76K   | 8.2×            |
-
----
-
-## Roadmap & Planned Features
-
-Below is our current development roadmap:
-
-- [x] **Physical Rotary Encoders**
-- [ ] **OLED Display Support**
-- [ ] **E-Ink Display Support**
-- [ ] **Memory LCD Display Support**
-- [x] **Implement mousekeys and trackball/mouse API**
-- [x] **Standard HID Gamepad (DirectInput)**
-
-### Bluetooth (BLE) Policy
-
-Full BLE support is explicitly out of scope:
-
-- **Minimal Codebase**: Adding BLE stacks and power management multiplies codebase size. DMK prioritizes simplicity.
-- **Wired Focus**: USB operation doesn't require complex low-power sleep state machines.
-- **Focus on Unique MCUs**: DMK targets platforms lacking keyboard firmwares (Milandr, Baikal). For nRF52 BLE, solutions like ZMK or RMK already exist.
-
-If wireless capability is needed, it can be offloaded to an external Bluetooth module over UART without complicating the core.
-
----
-
-## Build System
-
-Build target firmware cleanly using the provided `./build_all.sh` helper script.
-
-### Usage
+## Build
 
 ```bash
-./build_all.sh [OPTIONS]
+./build_all.sh -b hhkb -d HHKB_HYBRID -c   # needs cmake, make, uv, arm-none-eabi-gcc
+bash tools/nxmk/check_image.sh              # size and vector gates
 ```
 
-### Build Commands Examples
+Output: `build/hhkb-script/nxmk_hhkb_stm32l072.bin`.
 
-- **Clean build Corne (RP2040)**:
+## Layout
 
-  ```bash
-  ./build_all.sh -b corne --mcu rp2040 -c
-  ```
-
-- **Clean build Kabarga (nRF52840)**:
-
-  ```bash
-  ./build_all.sh -b kabarga --mcu nrf52840 -c
-  ```
-
-- **Clean build Pncateho (nRF52840)**:
-
-  ```bash
-  ./build_all.sh -b pncateho --mcu nrf52840 -c
-  ```
+- `dmk_core/` shared firmware core
+- `platforms/stm32l072/` MCU platform (CMSIS/LL drivers, FreeRTOS port, linker script)
+- `lib/freertos`, `lib/tinyusb` vendored libraries
+- `keyboards/hhkb/` HHKB firmware modules, VIA/Vial definitions and [docs](keyboards/hhkb/README.md)
+- `tools/hhkb/` flasher and Hybrid patcher, `tools/vial/` layout generation, `tools/nxmk/` image gates
+- `tests/` host tests: `bash tests/run_all_tests.sh` (see [tests/README.md](tests/README.md))
