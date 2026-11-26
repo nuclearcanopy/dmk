@@ -23,8 +23,7 @@ travel curve, calibration requests, compact EEPROM storage, the SOF lock,
 indicators and Grave Escape) and then the Python tests under `tests/`
 (`python3 -m unittest discover`), which cover the HHKB flasher and HTML
 patcher, VIA controls, reset scenarios and a check that the Hybrid sources
-contain no radio code (`tests/hhkb_classic/test_no_bluetooth.py`).
-The directory name `hhkb_classic` is historical; it holds the HHKB tests.
+contain no radio code (`tests/hhkb/test_no_bluetooth.py`).
 
 The **Core and HHKB Tests** workflow (`.github/workflows/core_hhkb_tests.yml`)
 runs the full suite on Linux and the sanitizer run on Linux and macOS.

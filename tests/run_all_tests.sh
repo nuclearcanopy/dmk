@@ -71,8 +71,8 @@ clang -Wall -Wextra -Wno-unused-variable -DVIAL -DHHKB_GRAVE_ESCAPE=1 -DMCU_stm3
 rm -f "${SCRIPT_DIR}/tests/test_vial_keycodes"
 
 if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
-    # HHKB Classic host-only algorithm and EEPROM guard tests
-    HHKB_TEST_DIR="${SCRIPT_DIR}/tests/hhkb_classic"
+    # HHKB host-only algorithm and EEPROM guard tests
+    HHKB_TEST_DIR="${SCRIPT_DIR}/tests/hhkb"
     HHKB_MODULES_DIR="${SCRIPT_DIR}/keyboards/hhkb/modules"
     clang -std=c11 -Wall -Wextra -Werror -O2 -I "${HHKB_MODULES_DIR}/ec" -I "${SCRIPT_DIR}/dmk_core/include" \
         "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/test_rapid_trigger.c" \
@@ -113,7 +113,7 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
     done
 
 else
-    echo "HHKB Classic sources absent; skipping HHKB firmware tests."
+    echo "HHKB sources absent; skipping HHKB firmware tests."
 fi
 
 # 2. Python Tool Tests

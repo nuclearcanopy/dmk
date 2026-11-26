@@ -140,7 +140,7 @@ int main(void){
                                   'keyboards/hhkb/modules/ec'):
                     command += ['-I', str(ROOT / directory)]
                 command += [str(ROOT / path) for path in (
-                    'tests/hhkb_classic/test_gesc_reports.c', 'dmk_core/drivers/usb.c',
+                    'tests/hhkb/test_gesc_reports.c', 'dmk_core/drivers/usb.c',
                     'dmk_core/features/oneshot.c')]
                 subprocess.run(command + ['-o', str(exe)], check=True)
                 subprocess.run([str(exe)], check=True)
