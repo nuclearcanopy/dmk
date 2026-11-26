@@ -89,30 +89,6 @@ clang -Wall -Wextra -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 '-DLED_PINS={1,2,3}' \
     "${SCRIPT_DIR}/dmk_core/drivers/led.c" -o "${SCRIPT_DIR}/tests/test_split_led"
 "${SCRIPT_DIR}/tests/test_split_led"
 rm -f "${SCRIPT_DIR}/tests/test_split_led"
-for rx_pin in 1 2; do
-    clang -Wall -Wextra -DDMK_SPLIT_TEST -DMCU_nrf52840 -DSPLIT_UART_HARDWARE \
-        -DSPLIT_TX_PIN=1 -DSPLIT_RX_PIN="$rx_pin" -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 \
-        -I "${SCRIPT_DIR}/tests/split_mocks" -I "${SCRIPT_DIR}/tests/mocks" \
-        -I "${SCRIPT_DIR}/dmk_core/include" -I "${SCRIPT_DIR}/dmk_core/config" \
-        -I "${SCRIPT_DIR}/dmk_core/features" -I "${SCRIPT_DIR}/dmk_core/drivers" \
-        "${SCRIPT_DIR}/tests/test_split_nrf.c" "${SCRIPT_DIR}/platforms/nrf52840/split.c" \
-        -o "${SCRIPT_DIR}/tests/test_split_nrf"
-    "${SCRIPT_DIR}/tests/test_split_nrf"
-done
-rm -f "${SCRIPT_DIR}/tests/test_split_nrf"
-for rx_pin in 1 2; do
-    connection=2
-    if [[ "$rx_pin" == 2 ]]; then connection=3; fi
-    clang -Wall -Wextra -DDMK_SPLIT_TEST -DMCU_rp2040 -DSPLIT_TX_PIN=1 \
-        -DSPLIT_RX_PIN="$rx_pin" -DSPLIT_CONNECTION_TYPE="$connection" \
-        -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 -I "${SCRIPT_DIR}/tests/split_mocks" \
-        -I "${SCRIPT_DIR}/tests/mocks" -I "${SCRIPT_DIR}/dmk_core/include" \
-        -I "${SCRIPT_DIR}/dmk_core/config" -I "${SCRIPT_DIR}/dmk_core/features" \
-        -I "${SCRIPT_DIR}/dmk_core/drivers" "${SCRIPT_DIR}/tests/test_split_pio.c" \
-        "${SCRIPT_DIR}/platforms/raspberrypi/split.c" -o "${SCRIPT_DIR}/tests/test_split_pio"
-    "${SCRIPT_DIR}/tests/test_split_pio"
-done
-rm -f "${SCRIPT_DIR}/tests/test_split_pio"
 for matrix_mode in direct row col; do
     if [[ "$matrix_mode" == direct ]]; then
         matrix_flags=(-DMATRIX_TYPE_DIRECT_PIN '-DDIRECT_PINS={0,1,2}')

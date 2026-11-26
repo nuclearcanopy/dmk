@@ -37,12 +37,12 @@ endif()
 set(KEYBOARD_DIR "${ACTUAL_KBD_DIR}")
 
 # Detect default MCU from config.h if not explicitly specified
-set(DEFAULT_MCU_VALUE "milandr")
+set(DEFAULT_MCU_VALUE "stm32l072")
 if(EXISTS "${ACTUAL_KBD_DIR}/config.h")
     file(READ "${ACTUAL_KBD_DIR}/config.h" _KBD_CFG)
     if(_KBD_CFG MATCHES "#[ \t]*define[ \t]+(DEFAULT_MCU|MCU_DEFAULT|MCU)[ \t]+[\"']?([a-zA-Z0-9_]+)[\"']?")
         string(TOLOWER "${CMAKE_MATCH_2}" DEFAULT_MCU_VALUE)
-    elseif(_KBD_CFG MATCHES "#[ \t]*define[ \t]+MCU_(RP2040|RP2350|NRF52840|MILANDR|BAIKAL)([ \t\r\n]|$)")
+    elseif(_KBD_CFG MATCHES "#[ \t]*define[ \t]+MCU_(STM32L072)([ \t\r\n]|$)")
         string(TOLOWER "${CMAKE_MATCH_1}" DEFAULT_MCU_VALUE)
     endif()
 endif()
@@ -169,10 +169,6 @@ if(DMK_PLATFORM_DRIVER_DIR)
 endif()
 
 project(${CMAKE_PROJECT_NAME} ASM C CXX)
-
-if(COMMAND pico_sdk_init)
-    pico_sdk_init()
-endif()
 
 # Include core targets compilation
 include(dmk_core/CMakeLists.txt)

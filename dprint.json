@@ -24,7 +24,6 @@
   "excludes": [
     "examples/**",
     "lib/**",
-    "platforms/raspberrypi/pico-sdk/**",
     "**/dep/**",
     "**/freertos/**",
     "**/Drivers/**",

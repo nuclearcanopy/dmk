@@ -386,12 +386,12 @@ function(build_keyboard KEYBOARD_NAME)
         target_compile_definitions(${TARGET_NAME} PRIVATE "ADC_ENABLED")
     endif()
 
-    # Conditional platform-specific sources for non-RP2040 MCUs
+    # Conditional platform-specific sources
     set(PLATFORM_EXTRA_SRC "")
-    if(SPLIT_ENABLED AND EXISTS "${PLATFORM_DIR}/split.c" AND NOT (MCU STREQUAL "rp2040" OR MCU STREQUAL "rp2350"))
+    if(SPLIT_ENABLED AND EXISTS "${PLATFORM_DIR}/split.c")
         list(APPEND PLATFORM_EXTRA_SRC "${PLATFORM_DIR}/split.c")
     endif()
-    if(RGB_ENABLED AND NOT (MCU STREQUAL "rp2040" OR MCU STREQUAL "rp2350"))
+    if(RGB_ENABLED)
         if(EXISTS "${PLATFORM_DIR}/ws2812_spi.c")
             list(APPEND PLATFORM_EXTRA_SRC "${PLATFORM_DIR}/ws2812_spi.c")
         elseif(EXISTS "${PLATFORM_DIR}/ws2812_ssp.c")
@@ -400,12 +400,6 @@ function(build_keyboard KEYBOARD_NAME)
             list(APPEND PLATFORM_EXTRA_SRC "${PLATFORM_DIR}/ws2812.c")
         endif()
     endif()
-    if(MIDI_ENABLED AND (MCU STREQUAL "rp2040" OR MCU STREQUAL "rp2350"))
-        if(EXISTS "${PICO_SDK_PATH}/lib/tinyusb/src/class/midi/midi_device.c")
-            list(APPEND PLATFORM_EXTRA_SRC "${PICO_SDK_PATH}/lib/tinyusb/src/class/midi/midi_device.c")
-        endif()
-    endif()
-
     dmk_platform_resolve_sources(DMK_FIRMWARE_SRC
         ${DMK_CORE_SRC} ${PLATFORM_SRC} ${PLATFORM_EXTRA_SRC})
 
@@ -435,29 +429,12 @@ function(build_keyboard KEYBOARD_NAME)
                     endif()
                 endif()
 
-                # Automatically compile any .pio assembly files found in the module
-                if(COMMAND pico_generate_pio_header)
-                    file(GLOB_RECURSE MODULE_PIO_FILES "${_abs_module_glob}/*.pio")
-                    foreach(PIO_FILE ${MODULE_PIO_FILES})
-                        message(STATUS "Generating PIO header for module: ${PIO_FILE}")
-                        pico_generate_pio_header(${TARGET_NAME} "${PIO_FILE}")
-                    endforeach()
-                endif()
             else()
                 message(FATAL_ERROR "Module directory not found: ${ABS_MODULE_PATH}")
             endif()
         endforeach()
     endif()
 
-    # Automatically compile any .pio assembly files found in keyboard directory
-    if(COMMAND pico_generate_pio_header)
-        file(GLOB KEYBOARD_PIO_FILES "${KBD_GLOB_DIR}/*.pio")
-        foreach(PIO_FILE ${KEYBOARD_PIO_FILES})
-            message(STATUS "Generating PIO header for keyboard: ${PIO_FILE}")
-            pico_generate_pio_header(${TARGET_NAME} "${PIO_FILE}")
-        endforeach()
-    endif()
-    
     # Note: Keyboard configuration and keymaps are fully defined in config.h
     
     target_link_libraries(${TARGET_NAME} PRIVATE ${PLATFORM_LIBS})
