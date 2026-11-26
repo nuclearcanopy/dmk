@@ -151,7 +151,7 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
         "${HHKB_TEST_DIR}/test_sof_lock.c" -o "${HHKB_TEST_DIR}/test_sof_lock"
     "${HHKB_TEST_DIR}/test_sof_lock"
     rm -f "${HHKB_TEST_DIR}/test_sof_lock"
-    for hhkb_test in test_keymap_storage test_indicators_system; do
+    for hhkb_test in test_keymap_storage test_indicators_system test_suspend_wake; do
         clang -std=c11 -Wall -Wextra -Werror -I "${HHKB_TEST_DIR}/mocks" \
             "${HHKB_TEST_DIR}/${hhkb_test}.c" -o "${HHKB_TEST_DIR}/${hhkb_test}"
         "${HHKB_TEST_DIR}/${hhkb_test}"
