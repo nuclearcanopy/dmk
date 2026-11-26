@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from .test_hybrid_button import ROOT, function
+from .hhkb_helpers import ROOT, function
 
 
 class CalibrationInputTest(unittest.TestCase):
@@ -28,7 +28,7 @@ typedef uint16_t matrix_row_t;
 typedef struct {uint8_t row,col,row_state_hi;} matrix_event_t;
 static matrix_row_t s_matrix_state[MATRIX_ROWS],published_state[MATRIX_ROWS];
 static bool calibration;
-static unsigned events,last_activity;
+static unsigned events;
 static int matrix_queue;
 static matrix_event_t received[20];
 static bool hhkb_is_calibrating(void){return calibration;}

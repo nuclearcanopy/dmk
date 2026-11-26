@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from .test_hybrid_button import ROOT, function
+from .hhkb_helpers import ROOT, function
 
 
 class DmkFmtAndViaControlsTest(unittest.TestCase):
@@ -74,10 +74,8 @@ uint8_t ec_curve_settings[8];
 const char *ec_curve_status = "Curve OK";
 static uint8_t s_dbg_flags, s_gesc_ovr, s_gesc_ign, s_power_saving, s_oversampling;
 static uint8_t s_scan_rate = 4, s_ht[4], s_led[2], s_rt[12];
-static bool s_cal_enabled = true, s_sof = true, s_bt_over, s_bt_wake;
-static uint8_t s_bt_hz = 1, s_bt_deep = 3, s_bt_sleep = 30, s_bt_ind = 0x0f;
-static uint8_t s_bt_act[2] = {1, 0};
-static unsigned s_dirty, s_cal_start, s_cal_finish, s_cal_print, s_show_bat, s_slot_req;
+static bool s_cal_enabled = true, s_sof = true;
+static unsigned s_dirty, s_cal_start, s_cal_finish, s_cal_print;
 
 void hhkb_settings_mark_dirty(void) { ++s_dirty; }
 uint8_t hhkb_gesc_ignore(void) { return s_gesc_ign; }
@@ -88,22 +86,6 @@ bool sof_lock_enabled(void) { return s_sof; }
 bool sof_lock_set_enabled(bool e) { s_sof = e; return true; }
 bool hhkb_get_debug_flag(uint8_t m) { return (s_dbg_flags & m) != 0; }
 void hhkb_set_debug_flag(uint8_t m, bool e) { if (e) s_dbg_flags |= m; else s_dbg_flags &= ~m; }
-uint8_t hhkb_bt_sleep_hz(void) { return s_bt_hz; }
-bool hhkb_bt_set_sleep_hz(uint8_t v) { if (v < 1 || v > 10) return false; s_bt_hz = v; return true; }
-uint8_t hhkb_bt_deep_minutes(void) { return s_bt_deep; }
-bool hhkb_bt_set_deep_minutes(uint8_t v) { s_bt_deep = v; return true; }
-bool hhkb_bt_oversampling(void) { return s_bt_over; }
-void hhkb_bt_set_oversampling(bool e) { s_bt_over = e; }
-uint8_t hhkb_bt_button_action(bool l) { return s_bt_act[l]; }
-void hhkb_bt_set_button_action(bool l, uint8_t v) { s_bt_act[l] = v; }
-uint8_t hhkb_hybrid_battery_level(void) { return 75; }
-uint8_t hhkb_bt_indicator_flags(void) { return s_bt_ind; }
-void hhkb_bt_set_indicator_flag(uint8_t i, bool e) { if (e) s_bt_ind |= 1u << i; else s_bt_ind &= ~(1u << i); }
-void hhkb_hybrid_show_battery(void) { ++s_show_bat; }
-uint8_t hhkb_bt_sleep_minutes(void) { return s_bt_sleep; }
-bool hhkb_bt_matrix_wake(void) { return s_bt_wake; }
-void hhkb_bt_set_sleep(uint8_t m, bool w) { s_bt_sleep = m; s_bt_wake = w; }
-bool hhkb_hybrid_request_slot(uint8_t s, bool p) { (void)s; (void)p; ++s_slot_req; return true; }
 bool ec_curve_set(uint8_t id, uint8_t v) { ec_curve_settings[id - EC_CURVE_ENABLE] = v; return true; }
 const char *hhkb_compact_status(void) { return "Saved (compressed)"; }
 void hhkb_get_cal_status_str(char *b, size_t n) { strncpy(b, "Cal OK", n); b[n - 1] = '\0'; }
@@ -157,12 +139,10 @@ int main(void) {
     assert(call(0x08, EC_CURVE_STATUS, 0, resp) && strcmp((char *)&resp[3], "Curve OK") == 0);
     assert(!call(0x07, 12, 1, resp) && !call(0x07, 28, 1, resp) && !call(0x07, 26, 1, resp));
 
-    // Hybrid controls
-    assert(call(0x08, 44, 0, resp) && resp[3] == 1);
-    assert(call(0x08, 50, 0, resp) && resp[3] == 75 && !call(0x07, 50, 1, resp));
-    assert(call(0x07, 56, 5, resp) && call(0x08, 56, 0, resp) && resp[3] == 5);
-    assert(!call(0x07, 56, 11, resp));
-    assert(call(0x07, 51, 1, resp) && s_show_bat == 1 && !call(0x07, 51, 0, resp));
+    // nxmk: former radio-related value IDs are not handled.
+    for (unsigned id = 40; id <= 56; ++id) {
+        assert(!call(0x08, id, 0, resp) && !call(0x07, id, 1, resp));
+    }
 
     // Calibration triggers, LED, RT, Hold-Tap, print
     assert(call(0x07, 7, 1, resp) && s_cal_start == 1 && call(0x07, 7, 0, resp) && s_cal_start == 1);

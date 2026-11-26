@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from .test_hybrid_button import ROOT, function
+from .hhkb_helpers import ROOT, function
 
 
 class ResetScenariosTest(unittest.TestCase):

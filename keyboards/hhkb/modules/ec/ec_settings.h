@@ -63,19 +63,6 @@ bool hhkb_settings_storage_writable(void);
 void hhkb_settings_mark_dirty(void);
 void vial_keyboard_eeprom_task(void);
 
-#ifdef HHKB_HYBRID
-uint8_t hhkb_bt_sleep_minutes(void);
-uint8_t hhkb_bt_sleep_hz(void);
-bool hhkb_bt_set_sleep_hz(uint8_t hz);
-bool hhkb_bt_matrix_wake(void);
-void hhkb_bt_set_sleep(uint8_t minutes, bool matrix_wake);
-uint8_t hhkb_bt_indicator_flags(void);
-void hhkb_bt_set_indicator_flag(uint8_t flag, bool enabled);
-uint8_t hhkb_bt_button_action(bool long_press);
-void hhkb_bt_set_button_action(bool long_press, uint8_t action);
-uint8_t hhkb_bt_last_slot(void);
-void hhkb_bt_set_last_slot(uint8_t slot);
-#endif
 
 // Grave Escape overrides: Alt, Ctrl, GUI, Shift (both sides).
 uint8_t hhkb_gesc_overrides(void);
@@ -149,9 +136,3 @@ rt_key_t *hhkb_get_rt_key(uint8_t col, uint8_t row);
 #endif
 
 #endif // EC_SETTINGS_H
-
-bool hhkb_bt_oversampling(void);
-void hhkb_bt_set_oversampling(bool enabled);
-
-uint8_t hhkb_bt_deep_minutes(void);
-bool hhkb_bt_set_deep_minutes(uint8_t minutes);

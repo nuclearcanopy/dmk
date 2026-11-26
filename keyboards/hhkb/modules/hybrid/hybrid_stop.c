@@ -1,86 +1,30 @@
 // SPDX-License-Identifier: MIT
-// Adapted from l3tnun's MIT-licensed hhkb_hybrid/power.c STOP wake sequence.
+// Reduced to the USB-wake-only battery STOP. Adapted from l3tnun's MIT-licensed hhkb_hybrid/power.c STOP wake sequence.
 // The upstream copyright and license are in LICENSE.protocol.
-#include "FreeRTOS.h"
-#include "task.h"
 #include "hybrid.h"
 #include "stm32l072xx.h"
 
-#define WAKE_EXTI_MASK ((1UL << 5) | (1UL << 13) | (1UL << 29))
+#define WAKE_EXTI_MASK (1UL << 13)
 // Volatile RAM markers for SWD; these are not persisted across reset.
-// 1: preparing, 2: waiting for release, 3: before WFI, 4: woke, 5: held, 6: reset/resume.
+// 1: preparing, 3: before WFI, 4: woke.
 volatile uint32_t hhkb_stop_stage;
 volatile uint32_t hhkb_stop_wake_count;
 
 #define LPTIM_ARR 500U // LSI / 128: about 1.7 seconds between watchdog refreshes.
 
-static TaskHandle_t sleep_wake_task;
-static volatile bool sleep_exti_enabled;
-void hhkb_hybrid_set_wake_task(void *task) { sleep_wake_task = task; }
-
-void hhkb_hybrid_sleep_exti(bool enabled) {
-    const uint32_t lines = (1UL << 5) | (1UL << 13);
-    sleep_exti_enabled = false;
-    EXTI->IMR &= ~lines;
-    if (!enabled) return;
-    RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-    SYSCFG->EXTICR[1] = (SYSCFG->EXTICR[1] & ~SYSCFG_EXTICR2_EXTI5) | SYSCFG_EXTICR2_EXTI5_PC;
-    SYSCFG->EXTICR[3] = (SYSCFG->EXTICR[3] & ~SYSCFG_EXTICR4_EXTI13) | SYSCFG_EXTICR4_EXTI13_PC;
-    EXTI->FTSR |= lines;
-    EXTI->RTSR |= lines;
-    EXTI->PR = lines;
-    NVIC_SetPriority(EXTI4_15_IRQn, (1U << __NVIC_PRIO_BITS) - 1U);
-    NVIC_ClearPendingIRQ(EXTI4_15_IRQn);
-    sleep_exti_enabled = true;
-    EXTI->IMR |= lines;
-    NVIC_EnableIRQ(EXTI4_15_IRQn);
-}
-
-void hhkb_hybrid_notify_wake_from_isr(void) {
-    if (sleep_exti_enabled && sleep_wake_task) {
-        BaseType_t woken = pdFALSE;
-        vTaskNotifyGiveFromISR(sleep_wake_task, &woken);
-        portYIELD_FROM_ISR(woken);
-    }
-}
-void EXTI4_15_IRQHandler(void) {
-    uint32_t pending = EXTI->PR & ((1UL << 5) | (1UL << 13));
-    EXTI->PR = pending;
-    if (pending) hhkb_hybrid_notify_wake_from_isr();
-}
+// Wake only: the pending EXTI line ends WFI even with PRIMASK set.
+void EXTI4_15_IRQHandler(void) { EXTI->PR = 1UL << 13; }
 void LPTIM1_IRQHandler(void) { LPTIM1->ICR = LPTIM_ICR_ARRMCF; }
 
-static uint16_t stable_lptim_count(void) {
-    uint16_t first, second;
-    do {
-        first = (uint16_t)LPTIM1->CNT;
-        second = (uint16_t)LPTIM1->CNT;
-    } while (first != second);
-    return first;
-}
-
-static uint32_t stop_wake_mask(bool critical) {
-    // Critical-battery STOP deliberately cannot be woken by PC5.
-    return WAKE_EXTI_MASK & ~(critical ? (1UL << 5) : 0UL);
-}
-
-static bool stop_button_down(void) {
-    // Also ignore held PC5 after periodic watchdog wakes in critical STOP.
-    return (EXTI->IMR & (1UL << 5)) && !(GPIOC->IDR & (1UL << 5));
-}
-
-static void prepare_wake_sources(bool critical) {
-    uint32_t mask = stop_wake_mask(critical);
+static void prepare_wake_sources(void) {
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-    SYSCFG->EXTICR[1] = (SYSCFG->EXTICR[1] & ~SYSCFG_EXTICR2_EXTI5) |
-                         SYSCFG_EXTICR2_EXTI5_PC;
     SYSCFG->EXTICR[3] = (SYSCFG->EXTICR[3] & ~SYSCFG_EXTICR4_EXTI13) |
                          SYSCFG_EXTICR4_EXTI13_PC;
     // Terminal path owns EXTI: do not inherit unrelated bootloader sources.
-    EXTI->FTSR = mask & ((1UL << 5) | (1UL << 13));
-    EXTI->IMR = mask;
+    EXTI->FTSR = WAKE_EXTI_MASK;
+    EXTI->RTSR = WAKE_EXTI_MASK;
+    EXTI->IMR = WAKE_EXTI_MASK;
     EXTI->EMR = 0;
-    EXTI->RTSR = mask & ((1UL << 5) | (1UL << 29));
 
     RCC->CSR |= RCC_CSR_LSION;
     while (!(RCC->CSR & RCC_CSR_LSIRDY)) {}
@@ -102,59 +46,27 @@ static void prepare_wake_sources(bool critical) {
     NVIC_EnableIRQ(LPTIM1_IRQn);
 }
 
-// LSI/128 is nominally 289 ticks/s. Wake only after release; a stuck
-// button at >=10 seconds cancels the attempt, as in the analyzed stock path.
-static unsigned off_press_action(uint32_t ticks, bool released) {
-    if (ticks >= 2890U) return 2;
-    return released && ticks >= 289U ? 1 : 0;
-}
-
-static void lptim_wait_ticks(uint32_t ticks) {
-    uint16_t prev = stable_lptim_count();
-    uint32_t elapsed = 0;
-    while (elapsed < ticks) {
-        uint16_t now = stable_lptim_count();
-        elapsed += now >= prev ? now - prev : LPTIM_ARR + 1U - prev + now;
-        prev = now;
-        IWDG->KR = 0xAAAA;
-        if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-    }
-}
-
-static void stop_once(uint32_t stage) {
+static void stop_once(void) {
     EXTI->PR = WAKE_EXTI_MASK;
     LPTIM1->ICR = LPTIM_ICR_ARRMCF;
     NVIC->ICPR[0] = 0xFFFFFFFFUL;
     PWR->CR |= PWR_CR_CWUF;
     PWR->CR = (PWR->CR & ~PWR_CR_PDDS) | PWR_CR_LPSDSR;
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
-    hhkb_stop_stage = stage;
+    hhkb_stop_stage = 3;
     __DSB();
     __WFI();
-    if (stage == 3) hhkb_stop_stage = 4;
+    hhkb_stop_stage = 4;
     ++hhkb_stop_wake_count;
     SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;
 }
 
+// Battery-only terminal state: wake solely on USB power (PC13), which resets.
 void hhkb_hybrid_enter_stop(void) {
-    // Ordinary OFF resumes; critical STOP ignores PC5 and resets on USB wake.
-    const uint32_t saved_cfgr = RCC->CFGR;
-    const uint32_t saved_core_clock = SystemCoreClock;
-    const uint32_t saved_nvic = NVIC->ISER[0];
-    const uint32_t saved_imr = EXTI->IMR, saved_emr = EXTI->EMR;
-    const uint32_t saved_rtsr = EXTI->RTSR, saved_ftsr = EXTI->FTSR;
-    const uint32_t saved_exti5 = SYSCFG->EXTICR[1], saved_exti13 = SYSCFG->EXTICR[3];
-    const uint32_t saved_mux = GPIOB->ODR & 0xFC07UL;
-    const uint32_t saved_spi = SPI1->CR1;
-    const uint32_t saved_pwr = PWR->CR;
-    const uint32_t saved_primask = __get_PRIMASK();
-    bool wake = false;
     hhkb_stop_stage = 1;
     hhkb_stop_wake_count = 0;
-    // Called only on battery after all pressed keys have been released.
     TIM2->DIER = 0;
     TIM2->CR1 &= ~TIM_CR1_CEN;
-    SPI1->CR1 &= ~SPI_CR1_SPE;
     if (ADC1->CR & ADC_CR_ADEN) {
         ADC1->CR |= ADC_CR_ADDIS;
         while (ADC1->CR & ADC_CR_ADEN) {}
@@ -168,10 +80,9 @@ void hhkb_hybrid_enter_stop(void) {
 
     __disable_irq();
     SysTick->CTRL = 0;
-    // ICER/ICPR below cover external IRQs only. A pending RTOS exception
-    // must not keep this PRIMASK-protected terminal WFI loop awake.
+    // A pending RTOS exception must not keep the terminal WFI loop awake.
     SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk | SCB_ICSR_PENDSVCLR_Msk;
-    prepare_wake_sources(hhkb_hybrid_off_is_deep());
+    prepare_wake_sources();
     // Preserve an attached debug session, but do not inherit low-power debug
     // clock retention when no debugger is attached.
     // CMSIS M0+ omits CoreDebug; DHCSR.C_DEBUGEN is architectural bit 0.
@@ -194,86 +105,9 @@ void hhkb_hybrid_enter_stop(void) {
     while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI) {}
     RCC->CR &= ~(RCC_CR_PLLON | RCC_CR_MSION);
 
-    // Finish the OFF press before sleeping. Otherwise its release can be
-    // cleared just before WFI, leaving the next press unarmed.
-    hhkb_stop_stage = 2;
-    while (stop_button_down()) {
-        IWDG->KR = 0xAAAA;
-        if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-        stop_once(2);
-    }
-
     for (;;) {
         IWDG->KR = 0xAAAA;
         if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-        stop_once(3);
-
-        if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-        if (stop_button_down()) {
-            hhkb_stop_stage = 5;
-            // LPTIM continues through STOP; accumulate across its ARR wrap.
-            uint16_t prev = stable_lptim_count();
-            uint32_t held_ticks = 0;
-            while (stop_button_down()) {
-                uint16_t now = stable_lptim_count();
-                held_ticks += now >= prev ? now - prev : LPTIM_ARR + 1U - prev + now;
-                prev = now;
-                IWDG->KR = 0xAAAA;
-                if (held_ticks >= 289U) GPIOA->BSRR = 1UL << 8;
-                if (off_press_action(held_ticks, false) == 2) {
-                    GPIOA->BRR = 1UL << 8;
-                    GPIOA->BSRR = 1UL << 9;
-                    lptim_wait_ticks(867U); // Approximately 3 s orange warning.
-                    GPIOA->BRR = 1UL << 9;
-                    while (stop_button_down()) {
-                        IWDG->KR = 0xAAAA;
-                        if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-                        stop_once(2);
-                    }
-                    goto restore_context;
-                }
-                if (!(GPIOC->IDR & (1UL << 13))) NVIC_SystemReset();
-            }
-            GPIOA->BRR = 1UL << 8;
-            if (off_press_action(held_ticks, true) == 1) {
-                hhkb_stop_stage = 6;
-                wake = true;
-                goto restore_context;
-            }
-        }
+        stop_once();
     }
-restore_context:
-    // Keep Nordic running. Restore clocks while interrupts and
-    // the scheduler remain masked; RTOS OFF time stays frozen.
-    RCC->CR |= RCC_CR_HSION;
-    while (!(RCC->CR & RCC_CR_HSIRDY)) {}
-    RCC->CFGR = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_HSI;
-    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI) {}
-    RCC->CR |= RCC_CR_PLLON;
-    while (!(RCC->CR & RCC_CR_PLLRDY)) {}
-    RCC->CFGR = saved_cfgr;
-    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {}
-    SystemCoreClock = saved_core_clock;
-    PWR->CR = saved_pwr;
-    LPTIM1->IER = 0;
-    EXTI->IMR = saved_imr; EXTI->EMR = saved_emr;
-    EXTI->RTSR = saved_rtsr; EXTI->FTSR = saved_ftsr;
-    SYSCFG->EXTICR[1] = saved_exti5; SYSCFG->EXTICR[3] = saved_exti13;
-    GPIOB->BSRR = saved_mux | ((0xFC07UL & ~saved_mux) << 16);
-    if (wake) {
-        GPIOC->BSRR = 1UL << 14;
-        ADC1->CR |= ADC_CR_ADVREGEN;
-        lptim_wait_ticks(3);
-    }
-    LPTIM1->CR = 0;
-    (void)*(volatile uint8_t *)&SPI1->DR;
-    (void)SPI1->SR;
-    hhkb_hybrid_resume_after_stop(wake);
-    SPI1->CR1 = saved_spi;
-    NVIC->ICER[0] = 0xFFFFFFFFUL;
-    NVIC->ICPR[0] = 0xFFFFFFFFUL;
-    vPortUpdateSysTickClock(saved_core_clock);
-    NVIC->ISER[0] = saved_nvic;
-    __set_PRIMASK(saved_primask);
-    return;
 }

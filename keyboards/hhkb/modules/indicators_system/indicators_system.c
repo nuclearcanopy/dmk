@@ -42,8 +42,7 @@ void keyboard_platform_tick(TickType_t now) {
     bool suspended = tud_suspended();
     bool power_saving_active = keyboard_power_saving_enabled() && (!mounted || suspended);
 #ifdef HHKB_HYBRID
-    bool battery = hhkb_hybrid_on_battery();
-    if (battery || hhkb_hybrid_output_bluetooth()) power_saving_active = false;
+    if (hhkb_hybrid_on_battery()) power_saving_active = false;
     if (!hhkb_hybrid_powered()) power_saving_active = false;
 #endif
     for (uint8_t i = 0; i < 2; i++) {

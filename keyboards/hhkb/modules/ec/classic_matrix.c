@@ -166,9 +166,6 @@ void hhkb_matrix_hardware_init(void) {
 // Keep peripheral power sequencing out of the scarce scanner SRAM section.
 __attribute__((noinline)) static void scan_adc_prepare(void) {
     bool requested = hhkb_get_oversampling();
-#ifdef HHKB_HYBRID
-    if (hhkb_hybrid_on_battery()) requested = hhkb_bt_oversampling();
-#endif
     bool oversampling = requested && hhkb_get_effective_scan_rate() != 4;
     if (oversampling != s_oversampling_applied) {
         while (ADC1->CR & ADC_CR_ADSTART);

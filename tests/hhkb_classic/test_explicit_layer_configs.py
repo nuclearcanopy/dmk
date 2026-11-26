@@ -2,7 +2,7 @@
 from pathlib import Path
 import re
 import unittest
-from .test_hybrid_button import ROOT
+from .hhkb_helpers import ROOT
 
 class ExplicitLayerConfigTest(unittest.TestCase):
     def test_no_bare_numeric_hold_layers(self):
@@ -12,7 +12,7 @@ class ExplicitLayerConfigTest(unittest.TestCase):
     def test_flat_press_cache_keeps_original_key(self):
         import subprocess
         import tempfile
-        from .test_hybrid_button import function
+        from .hhkb_helpers import function
         source=(ROOT/'dmk_core/core/keyboard.c').read_text()
         code=r'''
 #include <assert.h>

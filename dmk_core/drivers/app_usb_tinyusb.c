@@ -222,7 +222,7 @@ static void usb_device_task(void *param) {
 #endif
         tud_task_ext(0, false);
 #ifdef HHKB_HYBRID
-        bool allow_no_host_sleep = !hhkb_hybrid_on_battery() && !hhkb_hybrid_output_bluetooth();
+        bool allow_no_host_sleep = !hhkb_hybrid_on_battery();
 #else
         bool allow_no_host_sleep = true;
 #endif
@@ -369,12 +369,6 @@ static bool usb_hid_complete_send(bool sent) {
 
 bool USB_HID_SendReport(const USB_HID_KeyboardReport_TypeDef *report) {
     if (!report || !s_keyboard_queue) return false;
-#ifdef HHKB_HYBRID
-    if (hhkb_hybrid_output_bluetooth()) {
-        hhkb_hybrid_report(report->Modifier, report->Keycodes);
-        return true;
-    }
-#endif
     taskENTER_CRITICAL();
     s_latest_keyboard_report = *report;
     taskEXIT_CRITICAL();
@@ -384,9 +378,6 @@ bool USB_HID_SendReport(const USB_HID_KeyboardReport_TypeDef *report) {
 
 bool USB_HID_SendConsumerReport(uint16_t usage) {
     if (!s_keyboard_queue) return false;
-#ifdef HHKB_HYBRID
-    if (hhkb_hybrid_output_bluetooth()) return hhkb_hybrid_consumer_report(usage);
-#endif
     taskENTER_CRITICAL();
     s_latest_consumer = usage;
     taskEXIT_CRITICAL();
