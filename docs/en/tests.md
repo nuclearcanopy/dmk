@@ -1,70 +1,55 @@
-# Hardware validation checklist for dev
+# Hardware validation checklist
 
-This checklist covers physical behavior affected by the accepted changes. Unchecked items are planned tests, not verified results. Record the firmware commit, model (Classic / Classic Type-S / Hybrid), ANSI/JIS layout, host OS, USB topology, VIA settings and measurement equipment with each result. Repeat model-specific checks on the actual model: a Hybrid ANSI result does not validate Classic or JIS.
+Planned physical checks for the HHKB Hybrid Type-S (ANSI). Every item is
+unchecked: **no hardware result is recorded in this repository.** Any
+measurement made outside the repo (for example by the maintainer) is not
+reproduced here and must not be cited as a result until its log is committed.
 
-CI covers encoding, state-machine logic, bounds, serialization and simulated failures. Those checks are intentionally omitted here. Host logs alone do not establish wire timing, latency or power consumption.
+Record the firmware commit, host OS, USB topology, VIA settings and
+measurement equipment with each result. Host tests ([tests/README.md](../../tests/README.md))
+cover encoding, state machines and bounds only; they do not establish wire
+timing, latency or power.
 
-## USB SOF scheduling — PR #10
+## USB SOF scheduling
 
-Use the same hardware and settings for A/B builds with `HHKB_SOF_LOCK=0` and `HHKB_SOF_LOCK=1` (the default). Use an HHKB scan-diagnostic build and enable Polling Rate Monitor in VIA. A SOF-enabled build also supports switching modes for this session in VIA under Scan Rate. Keep `HHKB_SOF_MARGIN_US=150` initially and measure actual headroom for each model.
+Compare builds with `HHKB_SOF_LOCK=0` and `HHKB_SOF_LOCK=1` (default) on the
+same unit, with `HHKB_SCAN_DIAGNOSTICS` (default) and **Polling Rate
+Diagnostics** on. The lock can also be toggled for the session in VIA under
+Scan Rate. `HHKB_SOF_MARGIN_US` defaults to 150.
 
-- [x] Record a HID Console SOF On/Off comparison during key presses on physical Classic ANSI. Tested on Linux/Chromium with debug commit `6af27377`, waiting 10 seconds before each recording. On gives typical `age_avg` 948–949 µs and `age_max` 950–952 µs, with one interval peaking at 2942 µs. Off gives `age_avg` 988–1217 µs and a maximum of 2906 µs. No new drops or resynchronizations occur. The logs do not record other settings or USB topology. See [measurements and metric definitions](../../keyboards/hhkb/docs/en/config.md#usb-sof-measurements-on-classic-ansi) and [PR #10](https://github.com/aroum/dmk/pull/10).
+- [ ] Record `[LAT]` (`age_avg`, `age_max`, `lock`) with the lock on and off during typing.
+- [ ] Capture USB SOF, keyboard IN transactions and scan timing with a USB analyzer or logic analyzer before interpreting `[LAT]` as end-to-end latency.
+- [ ] At 1000 Hz, compare locked and unlocked delay, jitter and missed polls under idle, typing, repeated presses and chords.
+- [ ] Check reacquisition after connect, SOF interruption and host resume, with no stuck keys.
+- [ ] Compare direct USB, hubs/dock and at least two hosts.
+- [ ] Switch VIA scan rates 50/125/250/500/1000 Hz while connected; check no drift or starved USB work.
+- [ ] Test suspend/resume, replug and connecting with a key held.
 
-- [ ] Capture USB SOF, keyboard IN transactions and scan timing with a USB analyzer and/or synchronized logic-analyzer trace. Establish a reproducible measurement method before interpreting `[LAT]` as end-to-end latency.
-- [ ] At 1000 Hz, compare locked/unlocked scan-to-IN delay, jitter, worst case and missed polls under idle, ordinary typing, rapid repeated presses and chords. Report distributions, not just the best value.
-- [ ] Measure physical key movement/contact-to-host latency using a repeatable actuator or electrical/optical trigger and a host-side capture. Keep host and trigger timestamps synchronized; distinguish scan-to-IN timing from end-to-end latency.
-- [ ] Check convergence after connection, SOF interruption and host resume. Verify that the controller reacquires phase without stuck keys or bursts of scans.
-- [ ] Compare direct USB, USB 2/3 hubs and a dock, and at least two host controllers/operating systems. Check that the lead margin remains useful across different host IN phases.
-- [ ] Repeat with HID Console off/on, EC stream off/on, VIA traffic and media reports. Confirm that other endpoint completions do not masquerade as keyboard completions or bias `[LAT]`/phase tracking; correlate with the USB trace.
-- [ ] Change VIA rates between 50/125/250/500/1000 Hz while connected. Verify actual physical scan periods and report delivery, with no lock-induced drift or starvation of USB/Nordic work.
-- [ ] Test USB suspend/resume, unplug/replug, rapid reconnects, and connection with a key already held. Verify input resumes and releases reach the host.
-- [ ] On Hybrid, transition USB → battery Bluetooth → USB repeatedly. Confirm SOF synchronization does not change battery scan timing, wake behavior or battery current.
+## EC sampling and calibration
 
-## EC sampling and calibration — issues #8 and #12, PR #7
+- [ ] Record `[SCAN]`/`[RATE]` at 1000 Hz with Rapid Trigger and the travel curve off/on; confirm `work_max` has headroom and `miss` stays 0.
+- [ ] Measure row strobe, discharge and ADC acquisition timing with a logic analyzer or oscilloscope.
+- [ ] Calibrate every key; confirm each can be captured and values survive Finish and a cold power cycle.
+- [ ] Calibrate at 500 and 1000 Hz targets with **Calibration Diagnostics** on and off; VIA stays connected and normal input resumes without a stuck key.
+- [ ] Repeat the resting test with **EC Matrix Diagnostics** on and record any change in scan timing.
 
-- [ ] On Classic ANSI, Classic Type-S ANSI/JIS and Hybrid ANSI/JIS, record `[SCAN]`/`[RATE]` at 1000 Hz with RT and the travel curve off/on. Confirm steady `work_max` has margin below 1 ms and deadline misses do not accumulate.
-- [ ] Measure row strobe, C57 discharge and ADC acquisition timing with a logic analyzer/oscilloscope. Verify minimum discharge and settling times and check that longer discharge intervals have not changed resting readings or cross-key interference.
-- [ ] Compare normal scanning, baseline capture and peak capture on the same untouched board. Check the first key after OpAmp enable (R0 C0) and the noisiest keys for systematic shifts, using EC streaming disabled for the initial comparison.
-- [ ] Repeat the resting test with EC streaming enabled. Record whether logging changes scan timing or resting ADC readings. Include at least 60 seconds untouched and several minutes of typing.
-- [ ] Calibrate each physical key with normal bottom-out force. Verify that every real key can be captured, particularly JIS-specific keys, without false activity on neighboring keys. Compare resting/pressed readings after Finish and after a cold power cycle.
-- [ ] If a unit has a genuine resting baseline below 100 ADC counts, calibrate, save, cold-boot and verify that key retains its behavior and measurements. Synthetic low-baseline tests in CI are not a substitute for this unit.
-- [ ] Start and finish calibration repeatedly from VIA while pressing/releasing keys. Confirm the OS receives no calibration typing, the matrix tester remains usable and normal input resumes without a stuck key after Finish.
-- [ ] With real USB/Nordic traffic during calibration, check actual deadline misses, first-key baseline bias and host responsiveness. Determine whether a different calibration cadence or OpAmp policy is needed; the fork's half-rate schedule was not imported.
+## Rapid Trigger and key actions
 
-## Rapid Trigger and key actions — issue #11 and modifier/ownership fixes
+- [ ] Hold a key bottomed out for 30 s with varying finger pressure; with Bottom dead zone 0.5 mm there should be no unintended up/down events. Repeat with the travel curve and after save/replug.
+- [ ] Test shallow actuation and repeated partial release/repress on several switches.
+- [ ] Verify OS shortcuts with right-hand modifiers, hold-tap modifiers, One-Shot and `MK(...)`.
+- [ ] Hold the same key or layer through two assignments and release in both orders; confirm the host sees the surviving hold and the final release.
+- [ ] `KC_GESC` with each of Alt/Ctrl/GUI/Shift toggle on and off, and the Ignore-modifier setting.
 
-- [ ] Hold a key bottomed out for at least 30 seconds, press harder, then relax finger pressure without lifting. Check RT state and ADC/travel traces with the curve off/on. The accepted cap is at calibrated bottom, not an adjustable 0.5 mm zone; document any remaining false release below peak.
-- [ ] Test shallow actuation and repeated partial release/repress on several switches, including a modified dome/silencing-ring unit if available. Check physical repeatability and noise-triggered input.
-- [ ] Verify actual OS shortcuts with right Ctrl/Shift/Alt/GUI, HT modifiers, One-Shot and `MK(...)`, over USB and Hybrid Bluetooth. Include AltGr in a host layout that uses it.
-- [ ] Hold the same ordinary key or modifier through two physical assignments/HT/macro sources; release them in both orders. Confirm the host keeps the surviving hold and receives the final release.
-- [ ] Hold a layer through two assignments, switch a persistent TG layer while held and release in both orders. Verify the effective physical layout and HHKB system indication stay correct.
-- [ ] Assign `KC_GESC` through VIA Any and test left/right Alt, Ctrl, GUI and Shift. With the corresponding toggle off, each modifier selects Grave; with it on, Escape. Verify Escape priority for mixed modifiers, preserved modifier shortcuts, and release of modifiers before GESC. With no modifier, expect Escape. Repeat over Bluetooth on Hybrid.
+## Power and USB detection
 
-## Hybrid power, wake and Nordic transport
+- [ ] On USB power, confirm Power Saving Mode turns off LEDs and sensors with no host or when suspended, and scanning resumes on reconnect.
+- [ ] Unplug USB: confirm the keyboard stops sending, enters STOP, and replugging USB resets and restores typing.
+- [ ] Measure current in USB-active, power-saving and battery-STOP states (none is measured in this repository).
 
-- [ ] Measure battery current at 3 V for idle, typing, Fn indication off/on, OFF, and matrix-wake sleep at 1 Hz and 10 Hz. Use a release build without an attached debugger; compare with stock on the same unit.
-- [ ] Repeat sleep → OFF → wake and direct OFF → wake several times with PC5. Verify the stock-style hold/release thresholds, cancellation of an excessively long power-on hold, and successful typing after reconnection.
-- [ ] With matrix wake disabled, verify the inactivity timeout reaches OFF directly. With matrix wake enabled, verify wake by a held key and the configured sleep-to-OFF timeout. Repeat with USB inserted during each state.
-- [ ] Verify that USB-powered operation does not enter battery sleep automatically, and USB/BT profile changes retain a functioning keyboard after repeated transitions.
-- [ ] With a controllable supply, verify battery indication thresholds and critical-battery shutdown. Confirm PC5 does not wake the critical-battery STOP path, USB wakes it, and normal operation returns with restored supply voltage.
-- [ ] Verify pairing to a new host, switching all saved profiles, USB/BT switching and media-key delivery on actual hosts. Include a lost/out-of-range host and recovery without removing batteries.
+## Update, recovery and persistence
 
-## Update, recovery and persistence on physical boards
-
-- [ ] Exercise all three VIA scenarios on Classic and Hybrid with SW6 OFF. Return to stock with DMK EEPROM retained, return with DMK EEPROM erased, and reset DMK data while staying in DMK. Confirm PFU/DMK enumeration after reboot and the intended EEPROM contents. Check failure statuses and rearming. Automated dispatch and storage tests cover these paths; physical validation is pending.
-- [x] Flash Classic ANSI model PD-KB401B through PFU Bank 1 using the Linux HID flasher and confirm the new DMK device enumerates. On November 25, 2026, debug commit `6af27377` completed the transfer and final acknowledgement; the device returned as `CAFE:4014`, and VIA/HID Console worked after updating the Linux udev rule. Calibration/layout persistence and stock restoration were not checked in this run.
-- [ ] Upgrade an already-configured keyboard through Bank 1 recovery and return to DMK. Verify custom calibration, layout and settings remain usable without reconfiguration.
-- [ ] Test SW6 recovery alone and SW5+SW6 DMK wipe on Classic and Hybrid units with complete backups available. Confirm ordinary recovery preserves DMK data and the wipe does not alter factory-owned data or prevent stock operation.
-- [ ] On a disposable/test setup with SWD recovery and full backups, interrupt power during settings saves and verify a usable previous/new configuration returns. Compare factory-owned EEPROM regions before/after; do not perform destructive experiments on an unbacked-up daily-use board.
-- [ ] Test the local HTML updater with supported physical Classic/Hybrid variants and their correct factory containers. Verify real device reconnect/recovery behavior and successful return to both DMK and stock. Use only locally obtained proprietary firmware.
-
-## Other affected platforms
-
-- [ ] On a real RP2040/RP2350 keyboard, save settings across normal power cycles and an interrupted save. Confirm USB input remains responsive during writes.
-- [ ] On a real Milandr RGB board, inspect WS2812 frame/reset timing and exercise USB typing during animated SSP/DMA output. Check for corrupt frames and delayed/stuck input under load.
-
-### Hybrid calibration and held-key regression
-
-- [ ] Hybrid ANSI/JIS: calibrate every key with Calibration Monitor enabled at both 500 and 1000 Hz targets. VIA must remain connected through Finish and save/replug. A 1000 Hz target uses 500 Hz during calibration and resumes afterwards. Repeat with the monitor disabled.
-- [ ] RT on: hold one key for 30 seconds with normal changes in finger pressure; compare OS repeat with RT off. With Bottom dead zone at 0.5 mm there should be no unintended UP/DOWN events near bottom-out. Confirm deliberate upward motion still releases, and repeat after save/replug.
-- [ ] Repeat the hold test with a calibrated travel curve, and test toggling RT while a key is already held beyond its calibrated peak.
+- [ ] Flash the patched `.hfb` through the PFU Bank 1 path (Python and browser flasher); confirm `cafe:4014` enumerates with VIA and the HID console.
+- [ ] Exercise the three VIA debug scenarios with SW6 OFF: return to stock keeping EEPROM, erase nxmk EEPROM and restart, return to stock after erase.
+- [ ] SW6 recovery alone and SW5+SW6 erase, with full backups; confirm stock operation afterwards and that factory EEPROM is unchanged.
+- [ ] Interrupt power during a settings save on a disposable setup with SWD recovery; confirm a valid previous or new configuration returns.

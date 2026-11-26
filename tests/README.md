@@ -1,9 +1,8 @@
 # Host regression tests
 
-From the repository root, install Clang and Python through `uv`, then run:
+From the repository root, with `clang` and `uv` installed:
 
 ```bash
-uv --version
 bash tests/run_all_tests.sh
 ```
 
@@ -14,12 +13,22 @@ bash tests/run_runtime_tests.sh
 DMK_TEST_SANITIZERS=1 bash tests/run_runtime_tests.sh
 ```
 
-The runtime runner uses a unique temporary directory and removes its binaries on exit. `CC` selects the compiler (Clang by default). Sanitizers enable AddressSanitizer and UndefinedBehaviorSanitizer; failures stop the run.
+The runtime runner uses a temporary directory and removes its binaries on exit.
+`CC` selects the compiler (clang by default). `DMK_TEST_SANITIZERS=1` enables
+AddressSanitizer and UndefinedBehaviorSanitizer.
 
-Runtime coverage includes shared 6KRO key ownership, slot reuse, HT behavior, independent momentary/persistent layers, 20,000 deterministic model-based layer operations, One-Shot retapping, repeated lazy modifier activation, tick rollover and tracker exhaustion. HHKB tests additionally exercise calibration, ANSI/JIS EEPROM persistence and interrupted writes, scan processing, power/button/radio state machines, VIA controls, and Grave Escape modifier/override combinations and release ordering.
+`run_all_tests.sh` compiles and runs the C tests (core, hold-tap, one-shot,
+memory, Vial keycodes, and the HHKB tests for Rapid Trigger, scan processing,
+travel curve, calibration requests, compact EEPROM storage, the SOF lock,
+indicators and Grave Escape) and then the Python tests under `tests/`
+(`python3 -m unittest discover`), which cover the HHKB flasher and HTML
+patcher, VIA controls, reset scenarios and a check that the Hybrid sources
+contain no radio code (`tests/hhkb_classic/test_no_bluetooth.py`).
+The directory name `hhkb_classic` is historical; it holds the HHKB tests.
 
-The **Core and HHKB Tests** workflow runs the full suite on Linux and the sanitizer tests on Linux and macOS. It runs for relevant pushes and pull requests, and can be started from **Actions → Core and HHKB Tests → Run workflow**, selecting `dev`. Each job uploads its log, including on failure.
+The **Core and HHKB Tests** workflow (`.github/workflows/core_hhkb_tests.yml`)
+runs the full suite on Linux and the sanitizer run on Linux and macOS.
 
-These are host tests with simulated peripheral inputs. They do not establish ADC settling, USB/Bluetooth latency, physical wake behavior, or current consumption. Firmware builds and hardware measurements remain separate checks.
-
-Physical validation is tracked separately in the [hardware checklist](../docs/en/tests.md).
+These are host tests with simulated peripherals. They do not establish ADC
+settling, USB latency or current consumption. Physical validation is tracked
+separately in the [hardware checklist](../docs/en/tests.md).
