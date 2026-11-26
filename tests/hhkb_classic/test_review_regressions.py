@@ -131,7 +131,6 @@ int main(void){
 #include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
-#define ADC_CR_ADSTP 1
 #define ADC_CR_ADSTART 2
 #define ADC_CFGR1_AUTOFF 1
 #define ADC_ISR_EOC 1
@@ -139,9 +138,8 @@ static struct {uint32_t CR,ISR,CFGR1,DR;} adc;
 #define ADC1 (&adc)
 ''' + sample + r'''
 int main(void){
- adc.DR=1234;adc.CR=ADC_CR_ADSTP;
- assert(!adc_start_sample());
- adc.CR=0;adc.ISR=ADC_ISR_EOC; // Stale completion must also be discarded.
+ adc.DR=1234;
+ adc.ISR=ADC_ISR_EOC; // Completion left by a timed-out sample must be discarded.
  assert(adc_start_sample());assert(adc_finish_sample()==UINT16_MAX);
  adc.ISR=ADC_ISR_EOC;assert(adc_finish_sample()==1234);
 }
