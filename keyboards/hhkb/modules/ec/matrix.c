@@ -146,7 +146,6 @@ void matrix_task(void *pvParameters) {
     sof_lock_init();
 #endif
     matrix_row_t published_state[MATRIX_ROWS] = {0};
-    bool sensor_power_down = false;
 #ifdef HHKB_HYBRID
     hhkb_hybrid_init();
 #endif
@@ -154,7 +153,6 @@ void matrix_task(void *pvParameters) {
 #if HHKB_SOF_LOCK
         if (!tud_mounted() || tud_suspended()) sof_lock_reset();
 #endif
-        // Also reached while sleeping/powered off/power saving.
         hhkb_calibration_apply_pending();
 #ifdef HHKB_HYBRID
         hhkb_hybrid_power_poll();
@@ -168,34 +166,6 @@ void matrix_task(void *pvParameters) {
             hhkb_hybrid_enter_stop();
         }
 #endif
-        // Check power saving condition: host disconnected (not mounted) or USB suspended
-        bool usb_power_saving = keyboard_power_saving_enabled() &&
-                                (!tud_mounted() || tud_suspended());
-        if (usb_power_saving) {
-            if (!sensor_power_down) {
-                // Stop scan interrupts as well as the analog hardware.
-                TIM2->DIER &= ~TIM_DIER_CC1IE;
-                TIM2->SR = 0;
-                NVIC_ClearPendingIRQ(TIM2_IRQn);
-                (void)ulTaskNotifyTake(pdTRUE, 0);
-                // Disable power for capacitive sensor board and OpAmp
-                GPIOC->BRR = (1U << 14) | (1U << 7);
-                sensor_power_down = true;
-            }
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
-        } else if (sensor_power_down) {
-            // Restore sensor board and OpAmp power when USB host is active
-            GPIOC->BSRR = (1U << 14) | (1U << 7);
-            vTaskDelay(pdMS_TO_TICKS(10)); // Settle analog power
-            sensor_power_down = false;
-            update_scan_period();
-            TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
-            TIM2->SR = 0;
-            NVIC_ClearPendingIRQ(TIM2_IRQn);
-            TIM2->DIER |= TIM_DIER_CC1IE;
-        }
-
         if (s_scan_rate_applied != hhkb_get_effective_scan_rate() ||
             s_scan_calibrating != hhkb_is_calibrating()) {
             NVIC_DisableIRQ(TIM2_IRQn);
