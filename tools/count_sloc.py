@@ -16,7 +16,6 @@ EXCLUDED_DIRS = {
     "sdk",
     "Middlewares",
     "Drivers",
-    "u8g2",
     "freertos",
     "build",
     ".git",
