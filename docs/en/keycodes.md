@@ -239,8 +239,6 @@ Old EEPROM HT records and the short-lived dev modifier-tap records remain readab
 
 ## MIDI Keycodes and Helper Macros
 
-> [!NOTE]
-
 | Keycode Symbol                                        | Short Name / Alias      | Description                                           | Code / Format         |
 | ----------------------------------------------------- | ----------------------- | ----------------------------------------------------- | --------------------- |
 | `MIDI_NOTE_C_0` ... `MIDI_NOTE_B_5`                   | -                       | Play note (6 octaves, 72 notes)                       | `0x7100` ... `0x7147` |
