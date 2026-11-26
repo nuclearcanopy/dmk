@@ -12,11 +12,7 @@
 extern "C" {
 #endif
 
-#ifdef HHKB_JIS
-#define USER_EEPROM_MAGIC          0x484B4A45UL // JIS record geometry
-#else
 #define USER_EEPROM_MAGIC          0x484B4345UL // "HKCE" (versioned with CRC16)
-#endif
 #define USER_EEPROM_LEGACY_MAGIC   0x484B4344UL // "HKCD"
 #define USER_EEPROM_C_MAGIC        0x484B4343UL // "HKCC"
 #define USER_EEPROM_PREV_MAGIC     0x484B4342UL // "HKCB"

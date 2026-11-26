@@ -1,4 +1,4 @@
-"""Reject unusable captures and list physical missing keys for ANSI and JIS."""
+"""Reject unusable captures and list physical missing keys for the ANSI layout."""
 import subprocess
 import tempfile
 import unittest

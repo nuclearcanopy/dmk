@@ -7,7 +7,7 @@ from .hhkb_helpers import ROOT, function
 
 
 class ScanPipelineTest(unittest.TestCase):
-    def test_ansi_jis_rt_debug_calibration_and_timeout(self):
+    def test_ansi_rt_debug_calibration_and_timeout(self):
         source = (ROOT/'keyboards/hhkb/modules/ec/classic_matrix.c').read_text()
         pending_type = source[source.index('typedef struct {'):source.index('// Normalize once')]
         processing = function(source, 'void scan_prepare_pending(') + '\n' + function(source, 'bool scan_process_pending(')
@@ -21,17 +21,10 @@ class ScanPipelineTest(unittest.TestCase):
 #include <stdio.h>
 #include "rapid_trigger.h"
 #define MATRIX_COLS 15
-#ifdef HHKB_JIS
-#define MATRIX_ROWS 5
-#define HHKB_ROW_BITS {1,2,4,1024,2048}
-#define HHKB_ROW_MASK 0xc07
-#define KEYS 69
-#else
 #define MATRIX_ROWS 4
 #define HHKB_ROW_BITS {1,2,4,1024}
 #define HHKB_ROW_MASK 0x407
 #define KEYS 60
-#endif
 #include "scan_cache.h"
 #define ADC_CFGR1_AUTOFF 1
 #define DEBUG_FLAG_TOPRE 1
@@ -67,10 +60,6 @@ static unsigned xTaskGetTickCount(void){return mock_tick;}
 const uint16_t *ec_curve_lut;
 uint32_t ec_curve_revision;
 static int keyboard_get_flat_key_index(unsigned row,unsigned col){
-#ifdef HHKB_JIS
- static const unsigned populated[15]={29,27,29,31,29,29,31,29,31,31,31,31,31,31,31};
- if(!(populated[col]&(1u<<row)))return -1;
-#endif
  return col*MATRIX_ROWS+row;
 }
 static bool hhkb_hybrid_on_battery(void){return false;}
@@ -126,10 +115,6 @@ int main(void){
  (void)hhkb_hybrid_on_battery;(void)d;
  unsigned n=0;
  for(unsigned col=0;col<MATRIX_COLS;++col)for(unsigned row=0;row<MATRIX_ROWS;++row){
-#ifdef HHKB_JIS
-  static const unsigned populated[15]={29,27,29,31,29,29,31,29,31,31,31,31,31,31,31};
-  if(!(populated[col]&(1u<<row)))continue;
-#endif
   columns[n]=col;rows[n++]=row;
  }
  assert(n==KEYS);
@@ -194,11 +179,9 @@ int main(void){
 '''
         with tempfile.TemporaryDirectory() as tmp:
             src=Path(tmp)/'pipeline.c';src.write_text(harness)
-            for jis in (False,True):
-                out=Path(tmp)/('jis' if jis else 'ansi')
-                args=['clang','-std=c11','-Wall','-Wextra','-Werror','-O2']
-                if jis:args+=['-DHHKB_JIS']
-                args+=['-I',str(ROOT/'keyboards/hhkb/modules/ec'),'-I',str(ROOT/'dmk_core/include'),
-                       str(ROOT/'keyboards/hhkb/modules/ec/rapid_trigger.c'),str(src),'-o',str(out)]
-                subprocess.run(args,check=True)
-                subprocess.run([str(out)],check=True)
+            out=Path(tmp)/'ansi'
+            args=['clang','-std=c11','-Wall','-Wextra','-Werror','-O2',
+                  '-I',str(ROOT/'keyboards/hhkb/modules/ec'),'-I',str(ROOT/'dmk_core/include'),
+                  str(ROOT/'keyboards/hhkb/modules/ec/rapid_trigger.c'),str(src),'-o',str(out)]
+            subprocess.run(args,check=True)
+            subprocess.run([str(out)],check=True)

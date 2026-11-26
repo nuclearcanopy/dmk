@@ -17,13 +17,8 @@
 #ifndef SLOT_ADDRESS
 #define SLOT_ADDRESS 0x08080600UL
 #endif
-#ifdef HHKB_JIS
-#define SLOT_MAGIC_V1 0x314a4d44UL
-#define SLOT_MAGIC_V2 0x324a4d44UL
-#else
 #define SLOT_MAGIC_V1 0x314b4d44UL // 'DMK1' (Keymap only)
 #define SLOT_MAGIC_V2 0x324b4d44UL // 'DMK2' (Keymap + Combos + Macros)
-#endif
 #define SLOT_MAGIC    SLOT_MAGIC_V2
 #define SLOT_COMMIT   0x54494d43UL // 'CMIT'
 
@@ -69,12 +64,7 @@ __attribute__((noinline)) static bool legacy_valid(volatile const uint32_t *p, u
 }
 static bool valid(unsigned n) { return legacy_valid(slot(n), SLOT_MAGIC, PAYLOAD_WORDS); }
 static bool valid_v1(unsigned n) {
-#ifdef HHKB_JIS
-    (void)n;
-    return false; // DMK1 contained exactly 240 ANSI keys; no JIS geometry.
-#else
     return legacy_valid(slot_v1(n), SLOT_MAGIC_V1, V1_KEYMAP_WORDS);
-#endif
 }
 static bool has_valid_v1(void) {
     return valid_v1(0) || valid_v1(1);

@@ -166,7 +166,6 @@ int main(int argc, char **argv) {
         poll();assert(c_active>=0 && *c_phys(0x1708)==C_DONE);
         assert(*c_phys(0x700)==0 && *c_phys(0x1500)==0);
     }
-#ifndef HHKB_JIS
     /* DMK1's second slot overlaps neither the first compact slot nor its header. */
     fresh();
     uint32_t *v1=(void *)slot_v1(1);
@@ -179,7 +178,6 @@ int main(int argc, char **argv) {
         budget=cut;poll();budget=-1;reboot();
         assert(dynamic_keymap[3][59]==239%65);poll();assert(c_active>=0);
     }
-#endif
     /* Reset is tombstoned before either snapshot is invalidated. Prepare two
      * committed generations so an interrupted reset cannot resurrect slot 1. */
     memcpy(memory,saved,sizeof(saved));budget=-1;reboot();poll();

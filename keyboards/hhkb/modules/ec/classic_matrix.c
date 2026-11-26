@@ -276,10 +276,6 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
         uint16_t settle_start = (uint16_t)TIM2->CNT;
 
         for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
-#ifdef HHKB_JIS
-            static const uint8_t populated[MATRIX_COLS] = {29, 27, 29, 31, 29, 29, 31, 29, 31, 31, 31, 31, 31, 31, 31};
-            if (!(populated[col] & (1U << row))) continue;
-#endif
             // Overlap all previous-key work with C57 discharge, not the row strobe.
             // settle_start is captured right after row release / mux selection,
             // so waiting 4 us since settle_start guarantees >=2 us of discharge.
