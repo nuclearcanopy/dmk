@@ -45,21 +45,25 @@ matching `bluetooth|_bt_|nrf|pairing|gatt` (`build_test.yml`).
 
 ### Size, as built in this session
 
-One local build of this tree on 2026-11-26 with Arm GNU Toolchain 15.2.1 (the
-nix `gcc-arm-embedded` package, **not** the pinned 15.3.Rel2), default
-configuration (`HHKB_SCAN_DIAGNOSTICS` and `HHKB_SOF_LOCK` on):
+One local build of this tree on 2026-11-26 (commit 7f4e0805, Hybrid ANSI,
+`DMK_FW_VERSION=pin-1`, `./build_all.sh -d HHKB_HYBRID -c`) with
+`arm-none-eabi-gcc (Arm GNU Toolchain 15.2.Rel1 (Build arm-15.86)) 15.2.1 20251203`
+(the nix `gcc-arm-embedded` package, **not** the pinned 15.3.Rel2). The `.bin`
+sha256 is `6358ddabfdfb0fafa8d52bbc1e0cf008ec4029ca2d6e8be731128e2f3725beca`.
+
+`arm-none-eabi-size` (Berkeley format) on the ELF, and the `.bin` size:
 
 | Item | Bytes |
 | --- | ---: |
-| `.bin` (Flash used of 65,536) | 54,596 |
-| `.data` | 3,248 |
-| `.bss` | 13,348 |
-| `._user_heap_stack` | 2,052 |
+| `.bin` | 54,644 |
+| text | 54,636 |
+| data | 8 |
+| bss | 15,400 |
+| dec (total) | 70,044 |
 
-`.data + .bss + ._user_heap_stack` = 18,648 of 20,480 bytes of SRAM. These
-numbers are indicative only; they change with compiler and options.
-`arm-none-eabi-size -A -d build/hhkb-script/nxmk_hhkb_stm32l072` shows the
-sections after any build.
+`arm-none-eabi-size -A -d` on the same ELF reports `.data` 3,288, `.bss`
+13,348 and `._user_heap_stack` 2,052 bytes. These numbers are indicative only;
+they change with compiler and options.
 
 ## Container layout (Hybrid)
 
