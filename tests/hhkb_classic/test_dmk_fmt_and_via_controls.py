@@ -66,6 +66,7 @@ int main(void) {
 #define DEBUG_FLAG_RATE  4
 #define DEBUG_FLAG_CAL   8
 #define DEBUG_FLAG_USB   16
+#define DEBUG_FLAG_EEPROM 32
 #define EC_CURVE_ENABLE  30
 #define EC_CURVE_STATUS  37
 #define DMK_FW_VERSION   "26.11.25-test"
@@ -121,9 +122,9 @@ int main(void) {
     uint8_t resp[32] = {0};
     // Save command (0x09)
     assert(call(0x09, 0, 0, resp) && s_dirty == 1);
-    // Debug flags 19, 23, 24, 25, 62
-    const uint8_t dbg_ids[] = {19, 23, 24, 25, 62};
-    for (unsigned i = 0; i < 5; i++) {
+    // Debug flags 19, 23, 24, 25, 62, 67
+    const uint8_t dbg_ids[] = {19, 23, 24, 25, 62, 67};
+    for (unsigned i = 0; i < 6; i++) {
         assert(call(0x07, dbg_ids[i], 1, resp));
         assert(call(0x08, dbg_ids[i], 0, resp) && resp[3] == 1);
         assert(!call(0x07, dbg_ids[i], 2, resp));
