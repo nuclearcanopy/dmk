@@ -15,6 +15,10 @@ void debug_console_flush(void);
 void debug_console_printf(const char *fmt, ...);
 
 #include "rgb.h"
+#include "stall_diag.h"
+#if HHKB_STALL_DIAG
+#include "keyboard.h"
+#endif
 
 #ifndef VIAL_VENDOR_ID
 #define VIAL_VENDOR_ID 0xCafe
@@ -493,6 +497,20 @@ void vial_diag_task(void) {
                                      (unsigned long)age_avg, (unsigned long)age_max, (long)err,
                                      (unsigned long)lock, (unsigned long)lead, (long)in_off);
             }
+#if HHKB_STALL_DIAG
+            debug_console_printf("[STALL] eeprom_max=%lu us tud_max=%lu us | flash n=%lu fail=%lu max=%lu us | wake_peak=%lu us >5ms=%lu | adc_to=%lu scan_ovr=%lu | susp=%d pwrsave=%d sens_down=%d\r\n",
+                                 (unsigned long)g_stall.eeprom_max_us, (unsigned long)g_stall.tud_max_us,
+                                 (unsigned long)g_stall.flash_calls, (unsigned long)g_stall.flash_fail,
+                                 (unsigned long)g_stall.flash_max_us,
+                                 (unsigned long)g_stall.wake_peak_us, (unsigned long)g_stall.wake_over5ms,
+                                 (unsigned long)g_stall.adc_timeouts, (unsigned long)g_stall.scan_overruns,
+                                 tud_suspended() ? 1 : 0, keyboard_power_saving_enabled() ? 1 : 0,
+                                 (int)g_stall.sensor_down);
+            g_stall.eeprom_max_us = g_stall.tud_max_us = 0;
+            g_stall.flash_calls = g_stall.flash_fail = g_stall.flash_max_us = 0;
+            g_stall.wake_peak_us = g_stall.wake_over5ms = 0;
+            g_stall.adc_timeouts = g_stall.scan_overruns = 0;
+#endif
             hhkb_reset_scan_diagnostics_peaks();
 #else
             debug_console_printf("[RATE] matrix=%lu Hz, usb_loop=%lu Hz\r\n",

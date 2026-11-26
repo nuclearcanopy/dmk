@@ -11,6 +11,7 @@
 #include "stm32l0xx_ll_adc.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "stall_diag.h"
 
 
 static inline void delay_us_nop(uint32_t us) {
@@ -38,7 +39,12 @@ static inline bool adc_start_sample(void) {
 static inline uint16_t adc_finish_sample(void) {
     uint32_t timeout = 5000;
     while (!(ADC1->ISR & ADC_ISR_EOC) && --timeout);
-    if (!timeout) return UINT16_MAX;
+    if (!timeout) {
+#if HHKB_STALL_DIAG
+        g_stall.adc_timeouts++;
+#endif
+        return UINT16_MAX;
+    }
     return (uint16_t)(ADC1->DR & 0x0FFF);
 }
 

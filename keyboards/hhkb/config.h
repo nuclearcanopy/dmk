@@ -50,6 +50,10 @@
 #ifndef HHKB_SOF_LOCK
 #define HHKB_SOF_LOCK 1
 #endif
+// Opt-in stall counters printed with the [SCAN] line; see stall_diag.h.
+#ifndef HHKB_STALL_DIAG
+#define HHKB_STALL_DIAG 0
+#endif
 #ifndef HHKB_SOF_MARGIN_US
 #define HHKB_SOF_MARGIN_US 150
 #endif

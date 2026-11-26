@@ -7,12 +7,16 @@
 #include "config.h"
 #include "tusb.h"
 #include "sof_lock.h"
+#include "stall_diag.h"
 #ifdef HHKB_HYBRID
 #include "hybrid.h"
 #endif
 #include "stm32l072xx.h"
 
 extern QueueHandle_t matrix_queue;
+#if HHKB_STALL_DIAG
+stall_diag_t g_stall;
+#endif
 
 // Acquisition runs one level above the shared task priority when a level is
 // available; the task drops back between scans (see the loop in matrix_task).
@@ -181,6 +185,9 @@ void matrix_task(void *pvParameters) {
                 // Disable power for capacitive sensor board and OpAmp
                 GPIOC->BRR = (1U << 14) | (1U << 7);
                 sensor_power_down = true;
+#if HHKB_STALL_DIAG
+                g_stall.sensor_down = 1;
+#endif
             }
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -189,6 +196,9 @@ void matrix_task(void *pvParameters) {
             GPIOC->BSRR = (1U << 14) | (1U << 7);
             vTaskDelay(pdMS_TO_TICKS(10)); // Settle analog power
             sensor_power_down = false;
+#if HHKB_STALL_DIAG
+            g_stall.sensor_down = 0;
+#endif
             update_scan_period();
             TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
             TIM2->SR = 0;
@@ -220,6 +230,13 @@ void matrix_task(void *pvParameters) {
         // Latch the fire that started this scan before the next one can
         // rewrite it mid-scan; includes the fire-to-wake latency in the work.
         uint16_t sof_fire = sof_lock_last_fire();
+#if HHKB_STALL_DIAG
+        {
+            uint32_t wake_us = (uint16_t)((uint16_t)TIM2->CNT - sof_fire) / HHKB_SCAN_TIMER_TICKS_PER_US;
+            stall_max(&g_stall.wake_peak_us, wake_us);
+            if (wake_us > 5000U) g_stall.wake_over5ms++;
+        }
+#endif
 #endif
 #ifdef HHKB_SCAN_DIAGNOSTICS
         if (notifications > 1) s_matrix_scan_deadline_misses += notifications - 1;
@@ -234,7 +251,13 @@ void matrix_task(void *pvParameters) {
         previous_scan_start = scan_start;
 #endif
         hhkb_calibration_apply_pending();
+#if HHKB_STALL_DIAG
+        uint32_t adc_timeouts_before = g_stall.adc_timeouts;
+#endif
         hhkb_matrix_scan_raw(s_matrix_state);
+#if HHKB_STALL_DIAG
+        if (g_stall.adc_timeouts != adc_timeouts_before) g_stall.scan_overruns++;
+#endif
 #ifdef HHKB_SCAN_DIAGNOSTICS
         uint32_t scan_us = (uint16_t)(TIM2->CNT - scan_start) / HHKB_SCAN_TIMER_TICKS_PER_US;
         s_matrix_scan_us = scan_us;

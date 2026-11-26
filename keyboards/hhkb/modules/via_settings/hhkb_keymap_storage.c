@@ -10,6 +10,9 @@
 #endif
 
 #include "stm32l0xx.h"
+#if HHKB_STALL_DIAG
+#include "stall_diag.h"
+#endif
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -110,7 +113,21 @@ void vial_keyboard_keymap_load(void) {
 }
 void vial_keyboard_keymap_save(void) { pending = true; }
 
+#if HHKB_STALL_DIAG
+static bool write_word_impl(volatile uint32_t *dst, uint32_t value);
 static bool write_word(volatile uint32_t *dst, uint32_t value) {
+    if (*dst == value) return true;
+    stall_mark_t m = stall_mark();
+    bool ok = write_word_impl(dst, value);
+    stall_max(&g_stall.flash_max_us, stall_us_since(m));
+    g_stall.flash_calls++;
+    if (!ok) g_stall.flash_fail++;
+    return ok;
+}
+static bool write_word_impl(volatile uint32_t *dst, uint32_t value) {
+#else
+static bool write_word(volatile uint32_t *dst, uint32_t value) {
+#endif
     if (*dst == value) return true;
 #ifdef HHKB_EEPROM_WRITE
     return HHKB_EEPROM_WRITE(dst, value);

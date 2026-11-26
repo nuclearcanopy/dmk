@@ -11,6 +11,7 @@
 #include "tusb.h"
 #include "device/dcd.h"
 #include "usb_report_diag.h"
+#include "stall_diag.h"
 #ifdef HHKB_HYBRID
 #include "hybrid.h"
 #include "stm32l072xx.h"
@@ -220,7 +221,7 @@ static void usb_device_task(void *param) {
         }
         if (!battery_usb_off)
 #endif
-        tud_task_ext(0, false);
+        STALL_TIMED(g_stall.tud_max_us, tud_task_ext(0, false));
 #ifdef HHKB_HYBRID
         bool allow_no_host_sleep = !hhkb_hybrid_on_battery();
 #else
@@ -252,7 +253,7 @@ static void usb_device_task(void *param) {
         extern void vial_flush_pending_report(void);
         extern void vial_eeprom_task(void);
         vial_flush_pending_report();
-        vial_eeprom_task();
+        STALL_TIMED(g_stall.eeprom_max_us, vial_eeprom_task());
 #endif
 #ifdef DEBUG_CONSOLE_ENABLE
         extern void vial_diag_task(void);
