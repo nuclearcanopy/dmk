@@ -12,6 +12,9 @@
 #include "hybrid.h"
 #endif
 #include "stm32l072xx.h"
+#if HHKB_IDLE_SLOW_SCAN
+#include "idle_scan.h"
+#endif
 
 extern QueueHandle_t matrix_queue;
 #if HHKB_STALL_DIAG
@@ -33,6 +36,9 @@ static volatile uint8_t s_scan_divider;
 static uint8_t s_scan_phase;
 static uint8_t s_scan_rate_applied;
 static bool s_scan_calibrating;
+#if HHKB_IDLE_SLOW_SCAN
+static idle_scan_t s_idle;
+#endif
 
 static void update_scan_period(void) {
     static const uint16_t period_us[] = {10000, 8000, 4000, 2000, 1000, 5000, 11000};
@@ -44,6 +50,13 @@ static void update_scan_period(void) {
     // Leave a complete USB service window during calibration at 1 kHz.
     s_scan_divider = rate == 0 || (rate == 4 && s_scan_calibrating) ? 2 : 1;
     s_scan_phase = 0;
+#if HHKB_IDLE_SLOW_SCAN
+    if (s_idle.slow && !s_scan_calibrating) {
+        // Fixed 10 ms timer step (SOF lock keeps working); divider sets period.
+        s_scan_period_ticks = IDLE_SCAN_STEP_MS * 1000U * HHKB_SCAN_TIMER_TICKS_PER_US;
+        s_scan_divider = IDLE_SCAN_DIVIDER(HHKB_IDLE_SLOW_SCAN_PERIOD_MS);
+    }
+#endif
 }
 
 void TIM2_IRQHandler(void) {
@@ -151,6 +164,9 @@ void matrix_task(void *pvParameters) {
 #endif
     matrix_row_t published_state[MATRIX_ROWS] = {0};
     bool sensor_power_down = false;
+#if HHKB_IDLE_SLOW_SCAN
+    idle_scan_init(&s_idle, xTaskGetTickCount() * portTICK_PERIOD_MS);
+#endif
 #ifdef HHKB_HYBRID
     hhkb_hybrid_init();
 #endif
@@ -198,6 +214,9 @@ void matrix_task(void *pvParameters) {
             sensor_power_down = false;
 #if HHKB_STALL_DIAG
             g_stall.sensor_down = 0;
+#endif
+#if HHKB_IDLE_SLOW_SCAN
+            idle_scan_init(&s_idle, xTaskGetTickCount() * portTICK_PERIOD_MS);
 #endif
             update_scan_period();
             TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
@@ -254,6 +273,9 @@ void matrix_task(void *pvParameters) {
 #if HHKB_STALL_DIAG
         uint32_t adc_timeouts_before = g_stall.adc_timeouts;
 #endif
+#if HHKB_IDLE_SLOW_SCAN
+        bool scan_changed =
+#endif
         hhkb_matrix_scan_raw(s_matrix_state);
 #if HHKB_STALL_DIAG
         if (g_stall.adc_timeouts != adc_timeouts_before) g_stall.scan_overruns++;
@@ -288,6 +310,26 @@ void matrix_task(void *pvParameters) {
             first_event = false;
         }
 
+#if HHKB_IDLE_SLOW_SCAN
+        // After publishing, so the press that ends slow mode is already queued
+        // from this very scan and cannot be lost by the rate change.
+        {
+            bool key_activity = scan_changed;
+            for (uint8_t row = 0; row < MATRIX_ROWS; row++) key_activity |= s_matrix_state[row] != 0;
+            bool was_slow = s_idle.slow;
+            idle_scan_update(&s_idle, xTaskGetTickCount() * portTICK_PERIOD_MS,
+                             (uint32_t)HHKB_IDLE_TIMEOUT_S * 1000U, key_activity,
+                             hhkb_is_calibrating());
+            if (s_idle.slow != was_slow) {
+                NVIC_DisableIRQ(TIM2_IRQn);
+                update_scan_period();
+                TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
+                TIM2->SR = 0;
+                NVIC_ClearPendingIRQ(TIM2_IRQn);
+                NVIC_EnableIRQ(TIM2_IRQn);
+            }
+        }
+#endif
 #ifdef HHKB_SCAN_DIAGNOSTICS
         if (!first_event) {
             UBaseType_t waiting = uxQueueMessagesWaiting(matrix_queue);
