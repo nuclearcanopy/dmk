@@ -179,7 +179,7 @@ Diagnostics** to see progress in the console.
 In VIA: **Settings** -> **Show HID Console tab**. Debug output is off by
 default.
 
-- **EC Matrix Diagnostics:** `[EC] R<row> C<col> : raw=<12-bit ADC> base=<baseline> peak=<peak> travel=<percent> DN|UP`.
+- **EC Matrix Diagnostics:** `[EC] R<row>C<col> r=<12-bit ADC> b=<baseline> p=<peak> t=<percent>% DN|UP`.
   Only the latest changed sample is sent, and only when raw moves more than
   +/-40 counts or the state flips.
 - **Calibration Diagnostics:** `[CAL]` lines: baseline capture, per-key peak
@@ -192,11 +192,11 @@ default.
   `miss` should stay 0; `q_full` counts failed matrix-queue submissions.
   `lock=0` means the SOF lock is off or not acquired.
 - **USB Report Diagnostics:** once per second while USB is active,
-  `[USB] sub done busy drop resync q` (cumulative counters for keyboard and
-  consumer reports; VIA and console traffic excluded). `drop` counts reports
-  abandoned after bounded retries; `resync` counts overflow-recovery
+  `[USB] s d b dr rs q` (submitted, done, busy, dropped, resync, queued) (cumulative counters for keyboard and
+  consumer reports; VIA and console traffic excluded). `dr` counts reports
+  abandoned after bounded retries; `rs` counts overflow-recovery
   snapshots.
-- **VIA Telemetry Diagnostics:** `[VIA_DIAG] rx tx_sub tx_cpl tx_fail pend`
+- **VIA Telemetry Diagnostics:** `[VIA] rx tx_sub tx_cpl tx_fail pend` (values only, in that order)
   for VIA v3 traffic.
 - **EEPROM Write Diagnostics:** `[EEPROM]` lines for save and write failures.
 

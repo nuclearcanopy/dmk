@@ -415,10 +415,10 @@ void hhkb_cal_log_flush(void) {
         const cal_log_evt_t *evt = &s_cal_log[s_cal_log_tail % 8];
         switch (evt->kind) {
         case CAL_LOG_START:
-            debug_console_printf("[CAL] Capturing baseline (16 samples).\r\n");
+            debug_console_printf("[CAL] baseline...\r\n");
             break;
         case CAL_LOG_BASELINE:
-            debug_console_printf("[CAL] Baseline captured. Press each key firmly.\r\n");
+            debug_console_printf("[CAL] baseline ok\r\n");
             break;
         case CAL_LOG_KEY: {
             char bar[21];
@@ -429,7 +429,7 @@ void hhkb_cal_log_flush(void) {
             debug_console_printf("[CAL] [%s] %u%% %u/%u R%u C%u peak=%u base=%u\r\n",
                                  bar, pct, evt->count, NUM_KEYS, evt->row, evt->col, evt->a, evt->b);
             if (evt->count >= NUM_KEYS) {
-                debug_console_printf("[CAL] All %u keys calibrated. Finish and save in VIA.\r\n",
+                debug_console_printf("[CAL] all %u keys done\r\n",
                                      (unsigned)NUM_KEYS);
             }
             break;
@@ -699,7 +699,7 @@ void hhkb_debug_flush_sample(void) {
     s_dbg_pending = false;
     taskEXIT_CRITICAL();
     if (hhkb_get_debug_enabled())
-        debug_console_printf("[EC] R%u C%u : raw=%u base=%u peak=%u travel=%u%% %s\r\n",
+        debug_console_printf("[EC] R%uC%u r=%u b=%u p=%u t=%u%% %s\r\n",
             row, col, raw, s_cal_baseline[col][row], s_cal_peak[col][row], norm / 10, down ? "DN" : "UP");
 }
 

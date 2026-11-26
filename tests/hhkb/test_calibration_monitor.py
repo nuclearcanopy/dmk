@@ -53,7 +53,7 @@ static bool hhkb_is_calibrating(void){return s_calibration_mode;}
 int main(void){
  rate=4;update_scan_period();assert(s_scan_period_ticks==4000 && s_scan_divider==1);
  in_matrix=true;hhkb_calibration_start();assert(!formatted && !depth);
- in_matrix=false;hhkb_cal_log_flush();assert(formatted==1 && strstr(output,"Capturing"));
+ in_matrix=false;hhkb_cal_log_flush();assert(formatted==1 && strstr(output,"baseline..."));
  update_scan_period();assert(s_scan_period_ticks==4000 && s_scan_divider==2);
  in_matrix=true;
  for(unsigned pass=0;pass<16;pass++){
@@ -61,7 +61,7 @@ int main(void){
   hhkb_cal_decrement_samples();
  }
  assert(!s_capture_baseline && formatted==1);
- in_matrix=false;hhkb_cal_log_flush();assert(formatted==2 && strstr(output,"Baseline captured"));
+ in_matrix=false;hhkb_cal_log_flush();assert(formatted==2 && strstr(output,"baseline ok"));
  for(unsigned c=0;c<15;c++)for(unsigned r=0;r<ROWS;r++){
 #if ROWS==5
   static const unsigned populated[15]={29,27,29,31,29,29,31,29,31,31,31,31,31,31,31};

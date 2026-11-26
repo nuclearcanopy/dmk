@@ -462,7 +462,7 @@ void vial_diag_task(void) {
         if (hhkb_get_debug_flag(1U << 4) && tud_mounted() && !tud_suspended()) {
             usb_report_diag_t d;
             usb_report_diag_snapshot(&d);
-            debug_console_printf("[USB] sub=%lu done=%lu busy=%lu drop=%lu resync=%lu q=%lu\r\n",
+            debug_console_printf("[USB] s=%lu d=%lu b=%lu dr=%lu rs=%lu q=%lu\r\n",
                 (unsigned long)d.submitted, (unsigned long)d.completed, (unsigned long)d.busy,
                 (unsigned long)d.dropped, (unsigned long)d.resync, (unsigned long)d.queued);
         }
@@ -470,7 +470,7 @@ void vial_diag_task(void) {
 
 
         if (hhkb_get_debug_flag(1U << 1)) { // DEBUG_FLAG_VIA
-            debug_console_printf("[VIA_DIAG] rx=%lu tx_sub=%lu tx_cpl=%lu tx_fail=%lu pend=%d\r\n",
+            debug_console_printf("[VIA] %lu %lu %lu %lu %d\r\n",
                                  (unsigned long)vial_rx_count, (unsigned long)vial_tx_submit_count,
                                  (unsigned long)vial_tx_complete_count, (unsigned long)vial_tx_fail_count,
                                  has_pending_vial_response ? 1 : 0);
