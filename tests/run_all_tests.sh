@@ -105,6 +105,10 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
         "${HHKB_TEST_DIR}/test_sof_lock.c" -o "${HHKB_TEST_DIR}/test_sof_lock"
     "${HHKB_TEST_DIR}/test_sof_lock"
     rm -f "${HHKB_TEST_DIR}/test_sof_lock"
+    clang -std=c11 -Wall -Wextra -Werror -O2 -I "${HHKB_MODULES_DIR}/ec" \
+        "${HHKB_TEST_DIR}/test_idle_scan.c" -o "${HHKB_TEST_DIR}/test_idle_scan"
+    "${HHKB_TEST_DIR}/test_idle_scan"
+    rm -f "${HHKB_TEST_DIR}/test_idle_scan"
     for hhkb_test in test_keymap_storage test_indicators_system; do
         clang -std=c11 -Wall -Wextra -Werror -I "${HHKB_TEST_DIR}/mocks" \
             "${HHKB_TEST_DIR}/${hhkb_test}.c" -o "${HHKB_TEST_DIR}/${hhkb_test}"
