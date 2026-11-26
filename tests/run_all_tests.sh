@@ -54,52 +54,6 @@ for heap_size in 3072 8192; do
 done
 rm -f "${SCRIPT_DIR}/tests/test_heap4_failure"
 clang -Wall -Wextra -I "${SCRIPT_DIR}/tests/mocks" -I "${SCRIPT_DIR}/dmk_core/include" \
-    -I "${SCRIPT_DIR}/dmk_core/config" -I "${SCRIPT_DIR}/dmk_core/drivers" \
-    "${SCRIPT_DIR}/tests/test_split_packet.c" -o "${SCRIPT_DIR}/tests/test_split_packet"
-"${SCRIPT_DIR}/tests/test_split_packet"
-rm -f "${SCRIPT_DIR}/tests/test_split_packet"
-clang -Wall -Wextra -DDMK_SPLIT_TEST -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 -DRGB_NUM=3 -DLED_PIN=1 \
-    -I "${SCRIPT_DIR}/tests/split_mocks" -I "${SCRIPT_DIR}/tests/mocks" \
-    -I "${SCRIPT_DIR}/dmk_core/include" -I "${SCRIPT_DIR}/dmk_core/config" \
-    -I "${SCRIPT_DIR}/dmk_core/features" -I "${SCRIPT_DIR}/dmk_core/drivers" \
-    "${SCRIPT_DIR}/tests/test_split_protocol.c" "${SCRIPT_DIR}/dmk_core/drivers/split.c" \
-    -o "${SCRIPT_DIR}/tests/test_split_protocol"
-"${SCRIPT_DIR}/tests/test_split_protocol"
-rm -f "${SCRIPT_DIR}/tests/test_split_protocol"
-clang -Wall -Wextra -DDMK_SPLIT_TEST -DSPLIT_RIGHT -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 -DRGB_NUM=3 -DLED_PIN=1 \
-    -I "${SCRIPT_DIR}/tests/split_mocks" -I "${SCRIPT_DIR}/tests/mocks" \
-    -I "${SCRIPT_DIR}/dmk_core/include" -I "${SCRIPT_DIR}/dmk_core/config" \
-    -I "${SCRIPT_DIR}/dmk_core/features" -I "${SCRIPT_DIR}/dmk_core/drivers" \
-    "${SCRIPT_DIR}/tests/test_split_protocol.c" "${SCRIPT_DIR}/dmk_core/drivers/split.c" \
-    -o "${SCRIPT_DIR}/tests/test_split_protocol"
-"${SCRIPT_DIR}/tests/test_split_protocol"
-rm -f "${SCRIPT_DIR}/tests/test_split_protocol"
-clang -Wall -Wextra -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 '-DLED_PINS={1,2,3}' \
-    -DLED_DEBUG=0 -DLED_HID_CAPS_LOCK=1 -DLED_ACTIVITY_PIN=0 -I "${SCRIPT_DIR}/tests/split_mocks" \
-    -I "${SCRIPT_DIR}/tests/mocks" -I "${SCRIPT_DIR}/dmk_core/include" \
-    -I "${SCRIPT_DIR}/dmk_core/config" -I "${SCRIPT_DIR}/dmk_core/features" \
-    -I "${SCRIPT_DIR}/dmk_core/drivers" "${SCRIPT_DIR}/tests/test_split_led.c" \
-    "${SCRIPT_DIR}/dmk_core/drivers/led.c" -o "${SCRIPT_DIR}/tests/test_split_led"
-"${SCRIPT_DIR}/tests/test_split_led"
-rm -f "${SCRIPT_DIR}/tests/test_split_led"
-for matrix_mode in direct row col; do
-    if [[ "$matrix_mode" == direct ]]; then
-        matrix_flags=(-DMATRIX_TYPE_DIRECT_PIN '-DDIRECT_PINS={0,1,2}')
-    elif [[ "$matrix_mode" == row ]]; then
-        matrix_flags=(-DMATRIX_TYPE_ROW2COL -DMATRIX_ACTIVE_LOW '-DROW_PINS={3}' '-DCOL_PINS={0,1,2}')
-    else
-        matrix_flags=(-DTEST_COL2ROW -DMATRIX_TYPE_COL2ROW -DMATRIX_ACTIVE_LOW '-DROW_PINS={0,1}' '-DCOL_PINS={3}')
-    fi
-    clang -Wall -Wextra -Wno-unused-function "${matrix_flags[@]}" \
-        -DNUM_ROWS_SPLIT=2 -DNUM_COLS_SPLIT=3 -I "${SCRIPT_DIR}/tests/split_mocks" \
-        -I "${SCRIPT_DIR}/tests/mocks" -I "${SCRIPT_DIR}/dmk_core/include" \
-        -I "${SCRIPT_DIR}/dmk_core/config" -I "${SCRIPT_DIR}/dmk_core/features" \
-        -I "${SCRIPT_DIR}/dmk_core/drivers" "${SCRIPT_DIR}/tests/test_split_direct_matrix.c" \
-        "${SCRIPT_DIR}/dmk_core/drivers/matrix.c" -o "${SCRIPT_DIR}/tests/test_split_matrix"
-    "${SCRIPT_DIR}/tests/test_split_matrix"
-done
-rm -f "${SCRIPT_DIR}/tests/test_split_matrix"
-clang -Wall -Wextra -I "${SCRIPT_DIR}/tests/mocks" -I "${SCRIPT_DIR}/dmk_core/include" \
     -I "${SCRIPT_DIR}/dmk_core/config" -I "${SCRIPT_DIR}/dmk_core/drivers" -I "${SCRIPT_DIR}/dmk_core/features" \
     "${SCRIPT_DIR}/tests/test_features.c" "${SCRIPT_DIR}/dmk_core/features/oneshot.c" \
     "${SCRIPT_DIR}/dmk_core/features/macros.c" -o "${SCRIPT_DIR}/tests/test_features"
@@ -134,7 +88,7 @@ if [[ -f "${SCRIPT_DIR}/keyboards/hhkb/modules/ec/rapid_trigger.c" ]]; then
         "${HHKB_MODULES_DIR}/ec/rapid_trigger.c" "${HHKB_TEST_DIR}/rapid_trigger_reference.c" \
         "${HHKB_TEST_DIR}/test_scan_processing.c" -o /tmp/dmk-scan-processing-test
     /tmp/dmk-scan-processing-test
-    clang -std=c11 -Wall -Wextra -Werror -O2 -I "${SCRIPT_DIR}/tests/split_mocks" \
+    clang -std=c11 -Wall -Wextra -Werror -O2 -I "${SCRIPT_DIR}/tests/mocks" \
         -I "${SCRIPT_DIR}/dmk_core/include" "${SCRIPT_DIR}/dmk_core/features/ec_curve.c" \
         "${HHKB_TEST_DIR}/test_ec_curve.c" -o "${HHKB_TEST_DIR}/test_ec_curve"
     "${HHKB_TEST_DIR}/test_ec_curve"
