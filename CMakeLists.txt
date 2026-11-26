@@ -120,6 +120,12 @@ get_filename_component(DMK_ROOT "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 # HHKB model selection uses the same DEFINE list as other build features.
 if(KEYBOARD STREQUAL "hhkb")
     string(REPLACE "," ";" HHKB_MODELS "${DEFINE}")
+    # nxmk: radio-free fork for the HHKB Hybrid (ANSI) only.
+    option(NXMK_ALLOW_UPSTREAM_TARGETS "Allow upstream HHKB models that nxmk does not support" OFF)
+    if(NOT NXMK_ALLOW_UPSTREAM_TARGETS AND
+       (NOT "HHKB_HYBRID" IN_LIST HHKB_MODELS OR "HHKB_JIS" IN_LIST HHKB_MODELS))
+        message(FATAL_ERROR "nxmk only builds the HHKB Hybrid (ANSI): use -d HHKB_HYBRID")
+    endif()
     if("HHKB_TYPE_S" IN_LIST HHKB_MODELS OR HHKB_TYPE_S)
         message(FATAL_ERROR "HHKB_TYPE_S was renamed to HHKB_CLASSIC_TYPE_S")
     endif()

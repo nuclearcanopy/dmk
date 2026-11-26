@@ -12,7 +12,7 @@ Requires: uv run --with unicorn --with pyelftools tools/hhkb/scan_emu.py ...
 and arm-none-eabi-nm on PATH.
 
 Examples:
-  scan_emu.py time build/hhkb-script/dmk_hhkb_stm32l072
+  scan_emu.py time build/hhkb-script/nxmk_hhkb_stm32l072
   scan_emu.py gaps  ELF --offset -3     # release-to-strobe intervals, reading 3 counts below base
   scan_emu.py profile ELF --rt on       # instructions per function for one scan
   scan_emu.py cal ELF                   # baseline capture, full press and release of every key

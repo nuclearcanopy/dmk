@@ -1,196 +1,17 @@
 name: Build Firmware
 
+# nxmk: only the radio-free HHKB Hybrid (ANSI) image is built.
 on:
   push:
-    branches: [ main, master, dev ]
-    tags: [ "20*" ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master, dev ]
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      hhkb_scan_diagnostics:
-        description: Build HHKB Classic ANSI with detailed scan timing diagnostics
-        type: boolean
-        default: false
-
-      hhkb_scan_compare:
-        description: Compare scan instruction profiles against 6af2737
-        type: boolean
-        default: false
 
 jobs:
-  build-keyboards:
-    if: ${{ !inputs.hhkb_scan_diagnostics }}
-    name: Build ${{ matrix.keyboard }} (${{ matrix.mcu }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - keyboard: corne
-            mcu: milandr
-            args: "-c"
-          - keyboard: corne
-            mcu: rp2040
-            args: "-c --uf2"
-          - keyboard: jianovka
-            mcu: milandr
-            args: "-c"
-          - keyboard: kabarga
-            mcu: baikal
-            args: "-c --uf2 -d CE,VIA_V3,POWER_SAVING_ENABLED=1"
-          # - keyboard: magneteno
-          #   mcu: rp2350
-          #   args: "-c --uf2"
-          - keyboard: nizkoteno
-            mcu: rp2040
-            args: "-c --uf2"
-          - keyboard: omsk
-            mcu: rp2350
-            args: "-c --uf2"
-          - keyboard: pncateho
-            mcu: nrf52840
-            args: "-c --uf2"
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install Toolchain and Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi
-
-      - name: Install Baikal Toolchain
-        if: matrix.mcu == 'baikal'
-        run: |
-          curl -fL https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v14.2.0-3/xpack-riscv-none-elf-gcc-14.2.0-3-linux-x64.tar.gz -o "$RUNNER_TEMP/riscv-gcc.tar.gz"
-          tar -xzf "$RUNNER_TEMP/riscv-gcc.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/xpack-riscv-none-elf-gcc-14.2.0-3/bin" >> "$GITHUB_PATH"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Build Firmware (${{ matrix.keyboard }} / ${{ matrix.mcu }})
-        run: |
-          chmod +x build_all.sh
-          ./build_all.sh -b ${{ matrix.keyboard }} --mcu ${{ matrix.mcu }} ${{ matrix.args }}
-
-      - name: Package Kabarga VIA definition
-        if: matrix.keyboard == 'kabarga'
-        run: |
-          python3 -m json.tool keyboards/kabarga/via.json > /dev/null
-          cp keyboards/kabarga/via.json build/via.json
-
-      - name: Upload Firmware Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: firmware-${{ matrix.keyboard }}-${{ matrix.mcu }}
-          path: |
-            build/dmk_*
-            build/via.json
-          retention-days: 3
-          if-no-files-found: error
-
-  build-hhkb-classic:
-    name: Build HHKB Classic ${{ matrix.variant }}${{ inputs.hhkb_scan_diagnostics && ' (scan debug)' || '' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.hhkb_scan_diagnostics && '[{"variant":"classic","defines":"HHKB_CLASSIC"}]' || '[{"variant":"classic","defines":"HHKB_CLASSIC"},{"variant":"type-s","defines":"HHKB_CLASSIC_TYPE_S"},{"variant":"type-s-jis","defines":"HHKB_CLASSIC_TYPE_S,HHKB_JIS"}]') }}
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install Toolchain and Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build curl xz-utils
-
-      - name: Set up pinned HHKB compiler
-        uses: ./.github/actions/setup-hhkb-toolchain
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Build HFB
-        run: |
-          chmod +x build_all.sh
-          ./build_all.sh -b hhkb --mcu stm32l072 -d "${{ matrix.defines }}${{ inputs.hhkb_scan_diagnostics && ',HHKB_SCAN_DIAGNOSTICS=1' || '' }}" -c
-
-      - name: Compare scan code against baseline
-        if: ${{ inputs.hhkb_scan_compare && inputs.hhkb_scan_diagnostics }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/hhkb-scan-compare
-          cp build/hhkb-script/dmk_hhkb_stm32l072 /tmp/hhkb-scan-compare/current.elf
-          cp tools/hhkb/scan_emu.py /tmp/hhkb-scan-compare/scan_emu.py
-          git fetch origin 6af27377ab02569fa1733bff325582afee8155e9
-          git checkout --detach FETCH_HEAD
-          ./build_all.sh -b hhkb --mcu stm32l072 -d HHKB_CLASSIC,HHKB_SCAN_DIAGNOSTICS=1 -c
-          cp build/hhkb-script/dmk_hhkb_stm32l072 /tmp/hhkb-scan-compare/baseline.elf
-          for version in baseline current; do
-            arm-none-eabi-nm -S -n /tmp/hhkb-scan-compare/$version.elf > /tmp/hhkb-scan-compare/$version.symbols.txt
-            for rt in off on; do
-              uv run --with unicorn --with pyelftools python3 /tmp/hhkb-scan-compare/scan_emu.py profile /tmp/hhkb-scan-compare/$version.elf --rt "$rt" > /tmp/hhkb-scan-compare/$version-rt-$rt.txt
-              cat /tmp/hhkb-scan-compare/$version-rt-$rt.txt
-            done
-          done
-          git checkout --detach "${{ github.sha }}"
-          ./build_all.sh -b hhkb --mcu stm32l072 -d HHKB_CLASSIC_TYPE_S,HHKB_JIS,HHKB_SCAN_DIAGNOSTICS=1 -c
-          cp build/hhkb-script/dmk_hhkb_stm32l072 /tmp/hhkb-scan-compare/current-jis.elf
-          for version in current current-jis; do
-            for rt in off on; do
-              for offset in -3 500 2000; do
-                uv run --with unicorn --with pyelftools python3 /tmp/hhkb-scan-compare/scan_emu.py time /tmp/hhkb-scan-compare/$version.elf --rt "$rt" --offset "$offset" > /tmp/hhkb-scan-compare/$version-rt-$rt-offset-$offset.txt
-                cat /tmp/hhkb-scan-compare/$version-rt-$rt-offset-$offset.txt
-              done
-            done
-          done
-          ./build_all.sh -b hhkb --mcu stm32l072 -d HHKB_CLASSIC,HHKB_SCAN_DIAGNOSTICS=1 -c
-
-      - name: Upload scan comparison
-        if: ${{ inputs.hhkb_scan_compare && inputs.hhkb_scan_diagnostics }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: hhkb-scan-comparison
-          path: /tmp/hhkb-scan-compare/
-          retention-days: 3
-
-      - name: Package HFB and VIA layout
-        run: |
-          python3 -m json.tool keyboards/hhkb/via.json > /dev/null
-          mkdir -p build/hhkb-release
-          cp build/hhkb-script/*.hfb build/hhkb-release/dmk-hhkb-classic-${{ matrix.variant }}-via.hfb
-          cp keyboards/hhkb/via.json build/hhkb-release/
-
-      - name: Upload HFB
-        uses: actions/upload-artifact@v7
-        with:
-          name: dmk-hhkb-classic-${{ matrix.variant }}-via.hfb${{ inputs.hhkb_scan_diagnostics && '-scan-debug' || '' }}
-          path: build/hhkb-release/
-          retention-days: 3
-          if-no-files-found: error
-
   build-hhkb-hybrid:
-    if: ${{ !inputs.hhkb_scan_diagnostics }}
-    name: Build HHKB Hybrid ${{ matrix.layout }}${{ inputs.hhkb_scan_diagnostics && ' (scan debug)' || '' }}
+    name: Build HHKB Hybrid ANSI (no Bluetooth)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - layout: ansi
-            defines: HHKB_HYBRID
-          - layout: jis
-            defines: HHKB_HYBRID,HHKB_JIS
     steps:
       - uses: actions/checkout@v7
         with:
@@ -206,75 +27,25 @@ jobs:
 
       - uses: astral-sh/setup-uv@v10.3.3
 
-      - name: Build and package Hybrid STM32 binary
-        env:
-          HHKB_DEFINES: ${{ matrix.defines }}${{ inputs.hhkb_scan_diagnostics && ',HHKB_SCAN_DIAGNOSTICS=1' || '' }}
-          HHKB_LAYOUT: ${{ matrix.layout }}
-        run: |
-          ./build_all.sh -b hhkb -d "$HHKB_DEFINES" -c
-          mkdir -p build/hhkb-hybrid-release
-          # Blank-radio HFB generation is disabled after radio validation failures.
-          # python3 tools/hhkb/patch_hybrid_hfb.py --stm32-only --layout "$HHKB_LAYOUT" ...
-          cp build/hhkb-script/dmk_hhkb_stm32l072.bin "build/hhkb-hybrid-release/dmk-hhkb-hybrid-${HHKB_LAYOUT}.bin"
-          cp tools/hhkb/hhkb.html build/hhkb-hybrid-release/
-          cp keyboards/hhkb/via.json build/hhkb-hybrid-release/
+      - name: Build
+        run: ./build_all.sh -b hhkb -d HHKB_HYBRID -c
 
-      - name: Upload Hybrid STM32 binary
-        uses: actions/upload-artifact@v7
+      - name: Size, vector and no-Bluetooth gates
+        run: |
+          bash tools/nxmk/check_image.sh
+          if arm-none-eabi-nm build/hhkb-script/nxmk_hhkb_stm32l072 | grep -iE 'bluetooth|_bt_|nrf|pairing|gatt'; then
+            echo "Bluetooth symbols found"; exit 1
+          fi
+
+      - name: Package
+        run: |
+          mkdir -p build/nxmk-release
+          cp build/hhkb-script/nxmk_hhkb_stm32l072.bin build/nxmk-release/nxmk-hhkb-hybrid-ansi.bin
+          cp tools/hhkb/hhkb.html keyboards/hhkb/via.json build/nxmk-release/
+
+      - uses: actions/upload-artifact@v7
         with:
-          name: dmk-hhkb-hybrid-${{ matrix.layout }}-stm32${{ inputs.hhkb_scan_diagnostics && '-scan-debug' || '' }}
-          path: build/hhkb-hybrid-release/
-          retention-days: 3
-          if-no-files-found: error
-
-  build-le-capybara:
-    if: ${{ !inputs.hhkb_scan_diagnostics }}
-    name: Build Le Capybara (${{ matrix.target }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: vial
-            extra_cmake: "-DDEFINE=VIAL"
-            artifact_name: dmk-le-capybara-vial
-          - target: via
-            extra_cmake: "-DDEFINE=VIA_V3"
-            artifact_name: dmk-le-capybara-via
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install Toolchain and Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Build Firmware (${{ matrix.target }})
-        run: |
-          cmake -B build/le_capybara -DKEYBOARD=le_capybara ${{ matrix.extra_cmake }}
-          cmake --build build/le_capybara
-
-      - name: Package Le Capybara Artifacts
-        run: |
-          python3 -m json.tool keyboards/le_capybara/via.json > /dev/null
-          python3 -m json.tool keyboards/le_capybara/vial.json > /dev/null
-          mkdir -p build/capybara-release
-          cp build/le_capybara/dmk_le_capybara_stm32f072*.bin build/capybara-release/${{ matrix.artifact_name }}.bin
-          cp build/le_capybara/dmk_le_capybara_stm32f072*.hex build/capybara-release/${{ matrix.artifact_name }}.hex
-          cp keyboards/le_capybara/via.json build/capybara-release/
-          cp keyboards/le_capybara/vial.json build/capybara-release/
-
-      - name: Upload Le Capybara Firmware Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: build/capybara-release/
+          name: nxmk-hhkb-hybrid-ansi
+          path: build/nxmk-release/
           retention-days: 3
           if-no-files-found: error
