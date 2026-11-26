@@ -47,14 +47,8 @@ set(FLASH_BASE_ADDR "0x08010000")
 
 set(DEP_DIR "${PLATFORM_DIR}/dep")
 
-# TinyUSB directory resolution
-if(EXISTS "${DMK_ROOT}/platforms/raspberrypi/pico-sdk/lib/tinyusb/src/tusb.h")
-    set(TINYUSB_DIR "${DMK_ROOT}/platforms/raspberrypi/pico-sdk/lib/tinyusb")
-elseif(EXISTS "${DMK_ROOT}/platforms/milandr/dep/tinyusb/src/tusb.h")
-    set(TINYUSB_DIR "${DMK_ROOT}/platforms/milandr/dep/tinyusb")
-else()
-    set(TINYUSB_DIR "${DMK_ROOT}/platforms/baikal/Middlewares/Third_Party/TinyUSB")
-endif()
+# TinyUSB (vendored)
+set(TINYUSB_DIR "${DMK_ROOT}/lib/tinyusb")
 
 set(PLATFORM_INC
     "${PLATFORM_DIR}"
@@ -65,7 +59,6 @@ set(PLATFORM_INC
     "${DMK_ROOT}/lib/freertos/include"
     "${PLATFORM_DIR}/freertos_port"
     "${TINYUSB_DIR}/src"
-    "${TINYUSB_DIR}/hw"
 )
 
 set(PLATFORM_SRC

@@ -1,0 +1,1 @@
+tinyusb ref 86ad6e56c1700e85f1c5678607a762cfe3aa2f47 (from pico-sdk 98a542c); src only, portable trimmed to st/stm32_fsdev, class/bth removed
