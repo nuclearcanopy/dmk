@@ -378,6 +378,7 @@ if [[ -n "$DEFINE" && "$KEYBOARD" != "hhkb" ]]; then
     fi
 fi
 TARGET_NAME="dmk_${KBD_BASE}_${MCU}${SUFFIX}"
+[[ "$KBD_BASE" == "hhkb" ]] && TARGET_NAME="nxmk_${KBD_BASE}_${MCU}${SUFFIX}"
 BUILD_DIR="${SCRIPT_DIR}/build"
 if [[ "$KBD_BASE" == "hhkb" && "$MCU" == "stm32l072" ]]; then
     BUILD_DIR="${SCRIPT_DIR}/build/hhkb-script"

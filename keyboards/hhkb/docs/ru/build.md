@@ -51,7 +51,7 @@ STM32L072 выбирается через `DEFAULT_MCU` в конфигурац�
 
 ### Результат сборки Hybrid и следующий шаг
 
-Команды выше компилируют только открытый образ STM32: `build/hhkb-script/dmk_hhkb_stm32l072.bin`. Для ANSI/Type-S используйте `HHKB_HYBRID`, для JIS/Type-S JIS — `HHKB_HYBRID,HHKB_JIS`. Отдельного флага Type-S для Hybrid нет. Собирайте варианты по очереди: выходной каталог общий.
+Команды выше компилируют только открытый образ STM32: `build/hhkb-script/nxmk_hhkb_stm32l072.bin`. Для ANSI/Type-S используйте `HHKB_HYBRID`, для JIS/Type-S JIS — `HHKB_HYBRID,HHKB_JIS`. Отдельного флага Type-S для Hybrid нет. Собирайте варианты по очереди: выходной каталог общий.
 
 Можно не компилировать самостоятельно: [GitHub Actions](#github-actions) публикует `dmk-hhkb-hybrid-ansi-stm32` и `dmk-hhkb-hybrid-jis-stm32` с соответствующими `.bin`, HTML-патчером и `via.json`. Готовые пропатченные Hybrid HFB не распространяются, поскольку включают закрытый код Nordic.
 
@@ -186,8 +186,8 @@ HHKB использует статически созданную очередь
 Занятая Flash — длина сырого `.bin`, включая образ инициализации `.data` и функций в RAM. Размер дополненного HFB-контейнера не показывает объём занятой Flash. Выделенная RAM считается как `.data + .bss + ._user_heap_stack`: `.data` включает функции в RAM, `.bss` — статические стеки задач, а `._user_heap_stack` резервирует основной стек/стек прерываний с выравниванием. Динамическая куча FreeRTOS в этих стандартных сборках HHKB не включена; дополнительные модули с динамическим выделением памяти могут вернуть её в сборку. Невыделенная RAM не является измерением свободной кучи или запаса стеков во время работы.
 
 ```bash
-arm-none-eabi-size -A -d build/hhkb-script/dmk_hhkb_stm32l072
-arm-none-eabi-objdump -h build/hhkb-script/dmk_hhkb_stm32l072
+arm-none-eabi-size -A -d build/hhkb-script/nxmk_hhkb_stm32l072
+arm-none-eabi-objdump -h build/hhkb-script/nxmk_hhkb_stm32l072
 ```
 
 ### EEPROM
@@ -199,7 +199,7 @@ arm-none-eabi-objdump -h build/hhkb-script/dmk_hhkb_stm32l072
 Готовые сборки и бинарники публикуются на странице [GitHub Releases](https://github.com/aroum/dmk/releases), а также в артефактах CI:
 
 - **Для моделей Classic:** готовые к прошивке контейнеры `.hfb` (`AHHX01`, `AHHS01`, `AHKS01`).
-- **Для моделей Hybrid:** открытые бинарники STM32 (`dmk_hhkb_stm32l072.bin` для ANSI и JIS), файл [HTML-патчера](../../../../tools/hhkb/hhkb.html) и `via.json`.
+- **Для моделей Hybrid:** открытые бинарники STM32 (`nxmk_hhkb_stm32l072.bin` для ANSI и JIS), файл [HTML-патчера](../../../../tools/hhkb/hhkb.html) и `via.json`.
 
 CI для Hybrid публикует STM32-бинарники ANSI и JIS. Скачайте подходящий бинарник и [HTML-патчер](../../../../tools/hhkb/hhkb.html). Откройте страницу локально, выберите официальный HFB и бинарник DMK, затем нажмите Patch and download. Заводская прошивка радио сохраняется. Шаг сборки HFB с пустым радио закомментирован.
 
@@ -246,7 +246,7 @@ CI для Hybrid публикует STM32-бинарники ANSI и JIS. Ска
 Чтобы обойти аппаратную блокировку Bank 1 и одновременно не распространять закрытый код nRF, используются утилиты локального патчинга (автономная страница [hhkb.html](../../../../tools/hhkb/hhkb.html) или скрипт `tools/hhkb/patch_hybrid_hfb.py`):
 
 1. Пользователь самостоятельно скачивает оригинальный файл обновления со [страницы загрузок PFU](https://happyhackingkb.com/download/) (`HHKB800_FW_A048.hfb` для ANSI или `HHKB820_FW_JP_A249.hfb` для JIS).
-2. Патчер берёт открытый бинарник DMK (`dmk_hhkb_stm32l072.bin`), заменяет в оригинальном файле **только первые 64 КБ секции STM32**, оставляет нетронутой валидную заводскую секцию nRF и пересчитывает внешние контрольные суммы контейнера.
+2. Патчер берёт открытый бинарник DMK (`nxmk_hhkb_stm32l072.bin`), заменяет в оригинальном файле **только первые 64 КБ секции STM32**, оставляет нетронутой валидную заводскую секцию nRF и пересчитывает внешние контрольные суммы контейнера.
 3. Полученный локальный файл содержит валидный для загрузчика nRF образ, поэтому Bank 1 успешно завершает прошивку обоих контроллеров и активирует DMK.
 
 <a id="hybrid-local-patching"></a>
@@ -292,7 +292,7 @@ mkdir -p keyboards/hhkb/local
 # Сначала положите исходный HHKB800_FW_A048.hfb в keyboards/hhkb/local/.
 ./build_all.sh -b hhkb -d HHKB_HYBRID -c
 python3 tools/hhkb/patch_hybrid_hfb.py \
-  build/hhkb-script/dmk_hhkb_stm32l072.bin \
+  build/hhkb-script/nxmk_hhkb_stm32l072.bin \
   keyboards/hhkb/local/HHKB800_FW_A048.hfb \
   keyboards/hhkb/local/dmk_hybrid.hfb
 ```

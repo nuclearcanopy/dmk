@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define VIAL_KEYBOARD_NAME "HHKB Professional"
+#define VIAL_KEYBOARD_NAME "nxmk HHKB Hybrid-S"
 #define VIAL_PRODUCT_ID 0x4014
 #define VIA_PROTOCOL_MATRIX_ROWS 5
 #ifdef HHKB_JIS

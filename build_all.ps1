@@ -276,6 +276,7 @@ if ($Define -and $Keyboard -ne "hhkb") {
     }
 }
 $TargetName = "dmk_${KbdBase}_${Mcu}${Suffix}"
+if ($KbdBase -eq "hhkb") { $TargetName = "nxmk_${KbdBase}_${Mcu}${Suffix}" }
 $BuildDir = Join-Path $ScriptDir "build"
 if ($KbdBase -eq "hhkb" -and $Mcu -eq "stm32l072") { $BuildDir = Join-Path $BuildDir "hhkb-script" }
 $HrdProbe = Join-Path $ScriptDir "platforms\milandr\dep\probe\jlink4swd.cfg"

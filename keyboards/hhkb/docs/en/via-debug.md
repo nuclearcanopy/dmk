@@ -293,7 +293,7 @@ For comparisons, use a scan-diagnostic build and **Debug → Polling Rate Monito
 Use `[RATE]` / `[SCAN]` to verify actual throughput: a 1 ms USB HID interval does not guarantee 1000 fresh matrix scans/s. The author's approximately 850 µs result is from their fork on Hybrid ANSI, not a measurement of this implementation. Compare builds with the optional emulator (MIT attribution and license: `tools/hhkb/LICENSE.scan_emu`):
 
 ```bash
-uv run --with unicorn --with pyelftools tools/hhkb/scan_emu.py time build/hhkb-script/dmk_hhkb_stm32l072
+uv run --with unicorn --with pyelftools tools/hhkb/scan_emu.py time build/hhkb-script/nxmk_hhkb_stm32l072
 ```
 
 Install `arm-none-eabi-nm` on PATH. The emulator estimates peripheral timing and instruction cost; use it for relative comparisons, not hardware timing guarantees. Calibration buffering and per-key RT profiles from the fork are not included.

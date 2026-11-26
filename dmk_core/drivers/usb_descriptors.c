@@ -235,7 +235,7 @@ uint8_t const desc_configuration[] = {
 // String Descriptors
 char const *string_desc_arr[] = {
     (const char[]){0x09, 0x04}, // Supported language (English - 0x0409)
-    "dmk",                      // Manufacturer string
+    "nxmk",                     // Manufacturer string
     VIAL_KEYBOARD_NAME,         // Product string
 #if defined(VIA_V3) || defined(USE_VIA_V3)
     DMK_FW_VERSION,             // Firmware version string for VIA builds

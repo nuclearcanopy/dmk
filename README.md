@@ -2,6 +2,13 @@
 
 ---
 
+# nxmk (DMK fork: HHKB Hybrid, no Bluetooth)
+
+> nxmk is a derivative of [DMK](https://github.com/aroum/dmk) (MIT) that builds only
+> the HHKB Hybrid (ANSI) firmware with all Bluetooth code removed. See [NOTICE.md](NOTICE.md).
+> Build: `./build_all.sh -b hhkb -d HHKB_HYBRID -c`, then `bash tools/nxmk/check_image.sh`.
+> The text below is the unmodified upstream README.
+
 # DMK Firmware
 
 ![logo](logo.png)

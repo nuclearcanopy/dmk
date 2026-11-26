@@ -67,7 +67,11 @@ function(build_keyboard KEYBOARD_NAME)
             endif()
         endif()
     endif()
-    set(TARGET_NAME "dmk_${KBD_BASE}_${MCU}${SUFFIX}")
+    if(KBD_BASE STREQUAL "hhkb")
+        set(TARGET_NAME "nxmk_${KBD_BASE}_${MCU}${SUFFIX}") # nxmk: Hybrid-only fork
+    else()
+        set(TARGET_NAME "dmk_${KBD_BASE}_${MCU}${SUFFIX}")
+    endif()
     
     add_executable(${TARGET_NAME})
     

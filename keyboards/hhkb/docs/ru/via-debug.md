@@ -290,7 +290,7 @@ USB SOF-синхронизация включена по умолчанию че
 Проверяйте реальную частоту по `[RATE]` / `[SCAN]`: интервал USB HID 1 мс не гарантирует 1000 новых проходов матрицы в секунду. Около 850 мкс автор измерил в своём форке на Hybrid ANSI, а не в этой реализации. Для сравнения сборок доступен эмулятор (авторство и лицензия MIT: `tools/hhkb/LICENSE.scan_emu`):
 
 ```bash
-uv run --with unicorn --with pyelftools tools/hhkb/scan_emu.py time build/hhkb-script/dmk_hhkb_stm32l072
+uv run --with unicorn --with pyelftools tools/hhkb/scan_emu.py time build/hhkb-script/nxmk_hhkb_stm32l072
 ```
 
 `arm-none-eabi-nm` должен быть в PATH. Эмулятор приблизительно моделирует периферию и стоимость инструкций; он полезен для относительных сравнений, но не гарантирует тайминги на плате. Буферизация калибровки и RT-профили отдельных клавиш из форка не перенесены.

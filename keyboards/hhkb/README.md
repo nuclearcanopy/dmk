@@ -2,6 +2,8 @@
 
 ---
 
+> **nxmk:** this fork builds only the Hybrid ANSI image and has no Bluetooth; Bluetooth text below describes upstream DMK.
+
 # HHKB Classic & Hybrid DMK Firmware — Uses the Original Controller, No Hardware Mods Required
 
 Alternative firmware for HHKB Professional Classic and Hybrid keyboards. It runs directly on the original STM32L072 controller: no controller replacement, soldering, or keyboard disassembly is required.

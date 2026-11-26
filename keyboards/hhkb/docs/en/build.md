@@ -51,7 +51,7 @@ After building, patch the raw STM32 image into the official vendor firmware cont
 
 ### Hybrid build output and next step
 
-The commands above compile only the open STM32 image: `build/hhkb-script/dmk_hhkb_stm32l072.bin`. Use `HHKB_HYBRID` for ANSI/Type-S, or `HHKB_HYBRID,HHKB_JIS` for JIS/Type-S JIS. Hybrid Type-S needs no separate flag. Build variants sequentially because they share an output directory.
+The commands above compile only the open STM32 image: `build/hhkb-script/nxmk_hhkb_stm32l072.bin`. Use `HHKB_HYBRID` for ANSI/Type-S, or `HHKB_HYBRID,HHKB_JIS` for JIS/Type-S JIS. Hybrid Type-S needs no separate flag. Build variants sequentially because they share an output directory.
 
 Compiling yourself is optional: [GitHub Actions](#github-actions) publishes `dmk-hhkb-hybrid-ansi-stm32` and `dmk-hhkb-hybrid-jis-stm32` with matching `.bin` files, the HTML patcher and `via.json`. Patched Hybrid HFB images are not distributed because they contain proprietary Nordic code.
 
@@ -188,8 +188,8 @@ Flash usage is the raw `.bin` length, including the Flash initialization image f
 Inspect the sections after any build:
 
 ```bash
-arm-none-eabi-size -A -d build/hhkb-script/dmk_hhkb_stm32l072
-arm-none-eabi-objdump -h build/hhkb-script/dmk_hhkb_stm32l072
+arm-none-eabi-size -A -d build/hhkb-script/nxmk_hhkb_stm32l072
+arm-none-eabi-objdump -h build/hhkb-script/nxmk_hhkb_stm32l072
 ```
 
 ### EEPROM
@@ -201,7 +201,7 @@ arm-none-eabi-objdump -h build/hhkb-script/dmk_hhkb_stm32l072
 Ready-to-flash containers and binaries are available in [GitHub Releases](https://github.com/aroum/dmk/releases) and CI build artifacts:
 
 - **Classic models:** ready-made `.hfb` containers (`AHHX01`, `AHHS01`, `AHKS01`) that can be flashed directly.
-- **Hybrid models:** open-source STM32 binaries (`dmk_hhkb_stm32l072.bin` for ANSI and JIS) alongside the [HTML patcher](../../../../tools/hhkb/hhkb.html) and `via.json`.
+- **Hybrid models:** open-source STM32 binaries (`nxmk_hhkb_stm32l072.bin` for ANSI and JIS) alongside the [HTML patcher](../../../../tools/hhkb/hhkb.html) and `via.json`.
 
 Hybrid CI publishes STM32 binaries for ANSI and JIS. Download the matching binary and the standalone [HTML patcher](../../../../tools/hhkb/hhkb.html). Open the page locally, choose your official HFB and DMK binary, then click Patch and download. The result retains the factory radio firmware. The former empty-radio HFB step is commented out.
 
@@ -293,7 +293,7 @@ mkdir -p keyboards/hhkb/local
 # Place the unmodified HHKB800_FW_A048.hfb in keyboards/hhkb/local/ first.
 ./build_all.sh -b hhkb -d HHKB_HYBRID -c
 python3 tools/hhkb/patch_hybrid_hfb.py \
-  build/hhkb-script/dmk_hhkb_stm32l072.bin \
+  build/hhkb-script/nxmk_hhkb_stm32l072.bin \
   keyboards/hhkb/local/HHKB800_FW_A048.hfb \
   keyboards/hhkb/local/dmk_hybrid.hfb
 ```
