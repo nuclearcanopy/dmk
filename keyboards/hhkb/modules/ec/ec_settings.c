@@ -62,13 +62,13 @@ static uint8_t s_gesc_overrides, s_gesc_ignore;
 static rt_cfg_t s_rt_cfg = {
     .rt_enabled = false,
     .bottom_dz = 5,
-    .act_pm = 750,
+    .act_pm = 350,   // 1.4 mm actuation (35% of the 4 mm range)
     .press_pm = 25,
     .release_pm = 25,
-    .reset_pm = 50,
+    .reset_pm = 50,  // 0.2 mm top dead zone
 };
 static uint16_t s_classic_release_pm = 100; // Default 10% travel hysteresis (0.4 mm)
-static uint8_t s_actuation_offset_pct = 75;
+static uint8_t s_actuation_offset_pct = 35;
 #if HHKB_RT_KEYMASK
 static hhkb_rt_mask_t s_rt_mask;
 static uint32_t s_rt_mask_revision;
@@ -361,8 +361,8 @@ void hhkb_calibration_load(void) {
         }
     }
     rt_cfg_defaults(&s_rt_cfg);
-    s_rt_cfg.act_pm = 750;
-    s_actuation_offset_pct = 75;
+    s_rt_cfg.act_pm = 350;
+    s_actuation_offset_pct = 35;
     s_classic_release_pm = 100;
     s_rt_cfg.press_pm = 25;
     s_rt_cfg.release_pm = 25;

@@ -48,7 +48,7 @@ Values at first boot or after an EEPROM erase (`ec/ec_settings.c`,
 | --- | --- |
 | Target scan rate | 1000 Hz |
 | ADC oversampling 4x | off (and always bypassed at 1000 Hz) |
-| Actuation point | 75% of range (750 per-mille) |
+| Actuation point | 1.4 mm nominal (350 per-mille) |
 | Release hysteresis (RT off) | 0.4 mm nominal (100 per-mille) |
 | Rapid Trigger | off |
 | RT press / release sensitivity | 0.1 mm nominal (25 per-mille each) |
