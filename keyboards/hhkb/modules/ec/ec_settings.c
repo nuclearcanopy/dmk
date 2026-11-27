@@ -32,12 +32,15 @@ static void rt_mask_init(void);
 #define TOPRE_TYPICAL_TRAVEL_COUNTS 2370U
 #define CAL_BASELINE_SAMPLES 16U
 // Drift-aware capture (aroum/dmk#18). The drift/spread thresholds are
-// placeholders pending a hardware noise trace; keep them tunable.
+// unmeasured placeholders pending a hardware noise trace ("Needs hardware" in
+// docs/analysis/calibration-sag.md). Keep them tunable and do not tune them
+// from theory; the per-key retry below limits the cost of a wrong threshold.
 #define CAL_SETTLE_SCANS 16        // scans discarded after start/period change
 #define CAL_MAX_CAPTURE_SCANS 128  // counted scans before instability rejects
 #define CAL_DRIFT_ABS 8            // |mean(last8)-mean(first8)| floor, counts
 #define CAL_DRIFT_MEAN_DIV 64      // ... plus mean/64 of the window
 #define CAL_SPREAD_MAX 64          // max-min over one window, counts
+#define CAL_UNSTABLE_LIMIT 3       // failed windows before a key is rejected
 #define HHKB_SETTINGS_SAVE_DELAY_MS 500U
 
 static uint16_t s_cal_baseline[MATRIX_COLS][MATRIX_ROWS];
@@ -58,6 +61,13 @@ static uint8_t calibrated_key_count(void) {
     return count;
 }
 static uint32_t s_cal_down_mask[MATRIX_MASK_WORDS];
+// Press-start peak for the [CAL] peak log. While a baseline capture is running
+// the array is dead (record_peak cannot run yet), so it doubles as the per-key
+// capture state: failed windows so far, or CAL_STATE_DONE once the key's mean
+// is frozen or the key is rejected. Both roles fit 16 bits and never overlap;
+// the per-key retry must not add arrays because the STM32L072 RAM budget is
+// full (aroum/dmk#18).
+#define CAL_STATE_DONE 0xFFFFu  // resolved (frozen mean) or rejected
 static uint16_t s_cal_press_start_peak[MATRIX_COLS][MATRIX_ROWS];
 static uint16_t s_capture_base[MATRIX_COLS][MATRIX_ROWS];
 static uint16_t s_capture_peak[MATRIX_COLS][MATRIX_ROWS];
@@ -574,6 +584,9 @@ void hhkb_cal_log_flush(void) {
 void hhkb_calibration_start(void) {
     memset(s_capture_base, 0, sizeof(s_capture_base));
     memset(s_capture_first8, 0, sizeof(s_capture_first8));
+    // All keys pending again; this also resets the capture-state role of
+    // s_cal_press_start_peak (see its declaration).
+    memset(s_cal_press_start_peak, 0, sizeof(s_cal_press_start_peak));
     s_cal_baseline_samples = CAL_BASELINE_SAMPLES;
     // Discard the scans right after start: they carry the settle transient.
     s_cal_settle_scans = CAL_SETTLE_SCANS;
@@ -595,10 +608,10 @@ void hhkb_calibration_finish(void) {
             uint8_t k_idx = c * MATRIX_ROWS + r;
             bool was_actuated = (s_calibrated_mask[k_idx / 32] & (1U << (k_idx % 32))) != 0;
             // Do not save a range that the loader would reject after reboot.
-            // A press must have reached base + RT_MIN_RANGE (was_actuated) and
-            // carried the key through at least half of the typical Topre
-            // travel; the drifting resting level of a sagged capture is not a
-            // press (aroum/dmk#18).
+            // A press must have been detected (was_actuated, base + a quarter
+            // of the typical Topre travel) and carried the key through at
+            // least half of that travel; the drifting resting level of a
+            // sagged capture is not a press (aroum/dmk#18).
             if (was_actuated && s_capture_base[c][r] >= HHKB_CAL_BASE_MIN &&
                 s_capture_base[c][r] <= 2000 &&
                 s_capture_peak[c][r] > s_capture_base[c][r] + RT_MIN_RANGE &&
@@ -1074,6 +1087,8 @@ uint16_t hhkb_get_cal_baseline(uint8_t col, uint8_t row) { return s_cal_baseline
 uint16_t hhkb_get_cal_peak(uint8_t col, uint8_t row) { return s_cal_peak[col][row]; }
 void hhkb_cal_accumulate_baseline(uint8_t col, uint8_t row, uint16_t val) {
     if (s_cal_settle_scans) return; // settle scans are discarded, not counted
+    // A resolved key keeps its window mean; later scans must not touch it.
+    if (s_cal_press_start_peak[col][row] == CAL_STATE_DONE) return;
     s_capture_base[col][row] += val;
     if (s_cal_baseline_samples > CAL_BASELINE_SAMPLES / 2)
         s_capture_first8[col][row] += val;
@@ -1090,8 +1105,12 @@ void hhkb_cal_record_peak(uint8_t col, uint8_t row, uint16_t val) {
     if (s_capture_base[col][row] < HHKB_CAL_BASE_MIN) return;
     if (val > s_capture_peak[col][row]) s_capture_peak[col][row] = val;
 
-    uint16_t press_thresh = s_capture_base[col][row] + RT_MIN_RANGE;
-    uint16_t release_thresh = s_capture_base[col][row] + (RT_MIN_RANGE / 2);
+    // Drift alone must not read as a press: the calibration press gate is a
+    // quarter of the typical Topre travel, the release gate an eighth. This
+    // drives the down mask and the progress log only; finish() is the data
+    // guard (aroum/dmk#18). RT_MIN_RANGE keeps its role everywhere else.
+    uint16_t press_thresh = s_capture_base[col][row] + TOPRE_TYPICAL_TRAVEL_COUNTS / 4;
+    uint16_t release_thresh = s_capture_base[col][row] + TOPRE_TYPICAL_TRAVEL_COUNTS / 8;
     uint8_t k_idx = col * MATRIX_ROWS + row;
     bool is_down = (s_cal_down_mask[k_idx / 32] & (1U << (k_idx % 32))) != 0;
 
@@ -1127,6 +1146,7 @@ void hhkb_cal_note_scan_period_change(void) {
     if (!s_capture_baseline) return;
     memset(s_capture_base, 0, sizeof(s_capture_base));
     memset(s_capture_first8, 0, sizeof(s_capture_first8));
+    memset(s_cal_press_start_peak, 0, sizeof(s_cal_press_start_peak));
     s_cal_baseline_samples = CAL_BASELINE_SAMPLES;
     s_cal_settle_scans = CAL_SETTLE_SCANS;
     s_cal_windows = 0;
@@ -1139,12 +1159,15 @@ void hhkb_cal_decrement_samples(void) {
     }
     if (--s_cal_baseline_samples) return;
 
-    // The window is complete: reject keys that drifted across it (aroum/dmk#18).
-    uint32_t unstable_keys[MATRIX_MASK_WORDS] = {0};
-    bool unstable = false;
+    // The window is complete: gate every key still being measured
+    // (aroum/dmk#18). A stable key freezes this window's mean and stops
+    // accumulating; only unstable keys are re-measured, so one noisy cell
+    // cannot discard the captured data of its neighbours.
+    bool retry = false;
     for (uint8_t c = 0; c < MATRIX_COLS; c++) {
         for (uint8_t r = 0; r < MATRIX_ROWS; r++) {
             if (keyboard_get_flat_key_index(r, c) < 0) continue;
+            if (s_cal_press_start_peak[c][r] == CAL_STATE_DONE) continue;
             uint16_t sum = s_capture_base[c][r];
             uint16_t first = s_capture_first8[c][r];
             uint16_t first_mean = (uint16_t)(first / (CAL_BASELINE_SAMPLES / 2));
@@ -1153,38 +1176,49 @@ void hhkb_cal_decrement_samples(void) {
                                                      : first_mean - last_mean;
             uint16_t allow = (uint16_t)((sum / CAL_BASELINE_SAMPLES) / CAL_DRIFT_MEAN_DIV);
             if (allow < CAL_DRIFT_ABS) allow = CAL_DRIFT_ABS;
-            uint8_t k_idx = c * MATRIX_ROWS + r;
-            if (drift > allow || s_capture_max[c][r] - s_capture_min[c][r] > CAL_SPREAD_MAX) {
-                unstable_keys[k_idx / 32] |= 1U << (k_idx % 32);
-                unstable = true;
+            if (drift <= allow && s_capture_max[c][r] - s_capture_min[c][r] <= CAL_SPREAD_MAX) {
+                uint16_t mean = (uint16_t)(sum / CAL_BASELINE_SAMPLES);
+                s_capture_base[c][r] = mean;
+                s_capture_peak[c][r] = mean;
+                s_cal_press_start_peak[c][r] = CAL_STATE_DONE;
+                continue;
+            }
+            uint16_t fails = (uint16_t)(s_cal_press_start_peak[c][r] + 1);
+            s_cal_press_start_peak[c][r] = fails;
+            if (fails >= CAL_UNSTABLE_LIMIT) {
+                // Unstable in several windows: keep the saved range and reject.
+                s_capture_base[c][r] = 0;
+                s_capture_peak[c][r] = 0;
+                s_cal_press_start_peak[c][r] = CAL_STATE_DONE;
+                s_cal_unstable = true;
+            } else {
+                // One bad window is not a verdict: re-measure just this key in
+                // a fresh window.
+                s_capture_base[c][r] = 0;
+                s_capture_first8[c][r] = 0;
+                retry = true;
             }
         }
     }
-    if (unstable && (unsigned)(s_cal_windows + 1) < CAL_MAX_CAPTURE_SCANS / CAL_BASELINE_SAMPLES) {
-        // Unstable window: re-measure every key in a fresh window, up to
-        // CAL_MAX_CAPTURE_SCANS counted scans.
+    if (retry && (unsigned)(s_cal_windows + 1) < CAL_MAX_CAPTURE_SCANS / CAL_BASELINE_SAMPLES) {
+        // Retry window for the flagged keys, up to CAL_MAX_CAPTURE_SCANS
+        // counted scans. No settle scans here: only start and a scan-period
+        // change carry a settle transient.
         ++s_cal_windows;
-        memset(s_capture_base, 0, sizeof(s_capture_base));
-        memset(s_capture_first8, 0, sizeof(s_capture_first8));
         s_cal_baseline_samples = CAL_BASELINE_SAMPLES;
         return;
     }
+    // No retry window left: a key still pending never produced a stable window
+    // and cannot be trusted. (With CAL_UNSTABLE_LIMIT below the window budget
+    // this exit is unreachable; it keeps the capture total for other tunings.)
     for (uint8_t c = 0; c < MATRIX_COLS; c++) {
         for (uint8_t r = 0; r < MATRIX_ROWS; r++) {
             if (keyboard_get_flat_key_index(r, c) < 0) continue;
-            uint8_t k_idx = c * MATRIX_ROWS + r;
-            if (unstable_keys[k_idx / 32] & (1U << (k_idx % 32))) {
-                // Persistent instability: keep the saved range and reject.
-                s_capture_base[c][r] = 0;
-                s_capture_peak[c][r] = 0;
-                s_cal_press_start_peak[c][r] = 0;
-                s_cal_unstable = true;
-            } else {
-                uint16_t mean = (uint16_t)(s_capture_base[c][r] / CAL_BASELINE_SAMPLES);
-                s_capture_base[c][r] = mean;
-                s_capture_peak[c][r] = mean;
-                s_cal_press_start_peak[c][r] = mean;
-            }
+            if (s_cal_press_start_peak[c][r] == CAL_STATE_DONE) continue;
+            s_capture_base[c][r] = 0;
+            s_capture_peak[c][r] = 0;
+            s_cal_press_start_peak[c][r] = CAL_STATE_DONE;
+            s_cal_unstable = true;
         }
     }
     s_capture_baseline = false;

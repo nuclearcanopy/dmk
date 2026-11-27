@@ -3,7 +3,7 @@
 Base `aa4f01b2`. Paths under `keyboards/hhkb/modules/` (`ec/` and `via_settings/`).
 Symptom: after calibration the resting raw value sits 250–500 counts above the saved
 baseline (example base 276 vs settled ~553), is saved, and is reloaded on restart.
-Nothing below is hardware-confirmed. Claims are marked **code-supported** (the code
+Nothing in sections 1 to 6 is hardware-confirmed. Claims are marked **code-supported** (the code
 shows the mechanism) or **speculative** (needs a measurement).
 
 ## 1. How a baseline is sampled
@@ -178,3 +178,59 @@ absent on this host, and uses a `uint32_t` `s_capture_base` while the firmware u
 3. Whether a flash write stalls the scan (hypothesis 5).
 4. What the 276/553 *peak* represents (resting level vs. actual press): the `[CAL]` log at
    the first press prints peak/base (`ec_settings.c:822-824`).
+
+## Hardware observations 2026-11-27
+
+Session on the `test/remote-wakeup` image (`4606470b`, which carries the fix
+of §6 as `3632f2bb`). Raw logs are outside the repository
+(`/tmp/opencode/`, `~/hhkb-test/`) and not committed, so these results are
+provisional.
+
+**Capture-gate mechanism (confirmed).** Three complete calibration passes
+(16 settle scans + 16 counted baseline scans, then the press phase) saved
+44/60, 39/60 and 45/60 keys; every pass ended with status `Cal: unstable`.
+The rejected key set differed each pass (for example pass 1: `2 9 - Z X V
+G H L . LCtrl LAlt Space RAlt`; pass 3: `Esc Tab 1 2 3` plus `R0C3 R2C5
+R2C6 R0C7 R1C5 R0C4 R1C7 R2C7 R1C2 R0C6`), so the reject is not key-specific
+and not a press-pass error; all 14 keys listed for pass 1 were typed
+successfully afterwards, so the matrix and switches are healthy.
+
+Mechanism (source review at `4606470b`): every counted scan accumulates per
+cell, so "cell never sampled" is ruled out. The per-window cell gate
+(`ec/ec_settings.c:1150-1157`) rejects a cell when
+`|mean(last8) - mean(first8)| > max(8, mean/64)` or `max-min > 64`
+(`CAL_DRIFT_ABS`, `CAL_DRIFT_MEAN_DIV`, `CAL_SPREAD_MAX` are unmeasured
+placeholders, see "Needs hardware" 2). One unstable cell restarts ALL cells
+in a fresh window, up to 8 windows; at the cap the cells flagged in the
+final window are zeroed and `s_cal_unstable` latches. A zero base makes
+`hhkb_cal_record_peak` return early (`base < HHKB_CAL_BASE_MIN`), so that key
+can never be actuated for the rest of the session, and `finish` rejects it,
+keeping the previously saved range.
+
+Idle drift before any press falsely marked 3 to 12 keys as actuated because
+the calibration press detector fires at `base + RT_MIN_RANGE` (150 counts,
+about 6 percent of the 2370-count typical travel) while measured idle drift
+reached +160 counts. The finish gate (`peak >= base + 1185`) still refuses
+to save those, so saved data is not corrupted; finish only overwrites
+`s_cal_baseline` for accepted keys.
+
+**Sag fix not hardware-validated.** The sag-specific check (saved base vs
+resting raw at +1 s and +60 s, 60/60) is still open, blocked by the capture
+rejects. Unit test evidence stands: 83 tests green on the branch, the
+pre-fix tree fails the sag tests 3+1.
+
+**Fix implemented (working tree, this change).** Per-key retry keeps stable
+cells instead of restarting the whole window; a cell must fail
+`CAL_UNSTABLE_LIMIT` (3) windows before it is zeroed, so one noisy window no
+longer condemns a key; the calibration press threshold rises from
+`base + 150` to `base + TOPRE_TYPICAL_TRAVEL_COUNTS/4` (592 counts, release
+at an eighth) and no longer reads idle drift as a press. The drift/spread
+gates stay unmeasured placeholders (see "Needs hardware" 2); the retry makes
+a wrong threshold cost one key, not the window. Host tests:
+`tests/hhkb/test_calibration_retry.py` (three of its four tests fail on the
+pre-fix tree). Hardware validation of the fix and of the sag check remain
+open.
+
+Rich per-key logs from the first pass were lost when the console listener
+truncated `/tmp/opencode/cal-step2.raw`; only `/tmp/opencode/cal3.raw`
+(status plus unchanged list) remains.

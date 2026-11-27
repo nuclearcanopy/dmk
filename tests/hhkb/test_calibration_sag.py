@@ -23,6 +23,8 @@ PREAMBLE = r'''
 #define CAL_DRIFT_ABS 8
 #define CAL_DRIFT_MEAN_DIV 64
 #define CAL_SPREAD_MAX 64
+#define CAL_UNSTABLE_LIMIT 3
+#define CAL_STATE_DONE 0xFFFFu
 #define TOPRE_TYPICAL_TRAVEL_COUNTS 2370U
 #define HHKB_CAL_BASE_MIN 20u
 #define DEBUG_FLAG_CAL 8
@@ -172,7 +174,8 @@ int main(void){
  }
  assert(!hhkb_cal_is_capturing_baseline());
  // Key (0,0) is pressed only to base+600: it trips the press latch
- // (base+150) but stays well short of half the typical Topre travel.
+ // (base + a quarter of the typical travel) but stays well short of half
+ // the typical Topre travel.
  hhkb_cal_record_peak(0,0,1153);
  hhkb_cal_record_peak(0,0,SETTLED);
  hhkb_cal_record_peak(1,0,2500);

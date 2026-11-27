@@ -27,6 +27,9 @@ class CalibrationMonitorTest(unittest.TestCase):
 #define CAL_DRIFT_ABS 8
 #define CAL_DRIFT_MEAN_DIV 64
 #define CAL_SPREAD_MAX 64
+#define CAL_UNSTABLE_LIMIT 3
+#define CAL_STATE_DONE 0xFFFFu
+#define TOPRE_TYPICAL_TRAVEL_COUNTS 2370U
 #define HHKB_CAL_BASE_MIN 20u
 #define DEBUG_FLAG_CAL 8
 #define HHKB_SCAN_TIMER_TICKS_PER_US 4
