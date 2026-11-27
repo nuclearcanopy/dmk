@@ -331,7 +331,13 @@ bool usb_remote_wakeup_enabled(void) {
     return s_remote_wakeup_en;
 }
 
-__attribute__((weak)) void keyboard_usb_resume_cb(void) {}
+// Registered by the keyboard so the core needs no weak symbol (GCC 15 LTO
+// crashes on the weak definition under -flto).
+static void (*s_keyboard_resume_cb)(void);
+
+void usb_set_keyboard_resume_cb(void (*cb)(void)) {
+    s_keyboard_resume_cb = cb;
+}
 
 // Invoked when device is suspended
 void tud_suspend_cb(bool remote_wakeup_en) {
@@ -347,7 +353,7 @@ void tud_resume_cb(void) {
     rgb_resume();
     extern void USB_HID_ResyncKeyboard(void);
     USB_HID_ResyncKeyboard();
-    keyboard_usb_resume_cb();
+    if (s_keyboard_resume_cb) s_keyboard_resume_cb();
 }
 
 // This callback will be invoked when the host sends a SET_PROTOCOL request to switch between these modes.

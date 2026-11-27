@@ -38,7 +38,7 @@ uint32_t hhkb_matrix_stack_hwm(void) {
 }
 #endif
 
-void keyboard_usb_resume_cb(void) {
+static void matrix_usb_resume_cb(void) {
     if (s_matrix_task != NULL) xTaskNotifyGive(s_matrix_task);
 }
 static volatile uint16_t s_scan_period_ticks;
@@ -169,6 +169,7 @@ void matrix_task(void *pvParameters) {
     uint16_t previous_scan_start = (uint16_t)TIM2->CNT;
 #endif
     s_matrix_task = xTaskGetCurrentTaskHandle();
+    usb_set_keyboard_resume_cb(matrix_usb_resume_cb);
     update_scan_period();
     TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
     TIM2->SR = 0;
