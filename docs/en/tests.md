@@ -1,9 +1,11 @@
 # Hardware validation checklist
 
 Planned physical checks for the HHKB Hybrid Type-S (ANSI). Every item is
-unchecked: **no hardware result is recorded in this repository.** Any
-measurement made outside the repo (for example by the maintainer) is not
-reproduced here and must not be cited as a result until its log is committed.
+unchecked; measured results are recorded in the dated session sections at the
+end of this file, and only for the steps actually run. A result whose raw log
+is not committed to the repository (for example the 2026-11-27 logs kept
+under `/tmp` and `~/hhkb-test`) is provisional and must not be cited as a
+verified measurement until its log is committed.
 
 Record the firmware commit, host OS, USB topology, VIA settings and
 measurement equipment with each result. Host tests
@@ -168,9 +170,12 @@ diagnostics image is not needed (`HHKB_SCAN_DIAGNOSTICS` is on by default).
 [VIA & debug](../../keyboards/hhkb/docs/en/via-debug.md#key-calibration): the
 matrix reports no keys to the host while calibration runs, so keep the second
 keyboard in charge. Known hazard: the baseline can be captured too low and
-saved, and the firmware accepts it; an analysis of the failure mode is on
-branch `analysis/calibration-sag` (`docs/analysis/calibration-sag.md` there,
-nothing in it is confirmed on hardware).
+saved, and the firmware accepts it; an analysis of the failure mode is in
+`docs/analysis/calibration-sag.md` on the kept branches
+(`analysis/calibration-sag`, `fix/calibration-sag`, `test/remote-wakeup`).
+Its sag claims are not confirmed on hardware; the 2026-11-27 session
+confirmed only the capture-gate reject mechanism (see
+[2026-11-27](#2026-11-27)).
 
 1. Record the current state and leave the keyboard idle about 10 s, all keys
    up, no VIA traffic.
@@ -522,3 +527,180 @@ for line in sys.stdin:
         rel[code] = t
 print(f"presses={presses} chatter(<15ms)={chatter}")
 ```
+
+## 2026-11-27
+
+One session on the candidate image from branch `test/remote-wakeup`: commits
+`b154d9f8` (upstream aroum/dmk `70b61f74` remote-wakeup cherry-pick,
+conflicts resolved) and `4606470b` (build fix: GCC 15.2 arm-none-eabi `-flto`
+ICE in IPA ICF when a weak `keyboard_usb_resume_cb` was called; replaced with
+a registered function pointer `usb_set_keyboard_resume_cb`, behavior
+unchanged). Image `~/hhkb-test/images/nxmk-wake-test.hfb`, sha256
+`9d5d8420e13bf33926b3401dd00b46840fe3facc74bb173fec30a9f5c8936240`, 282672
+bytes; `nxmk-wake-test.bin` sha256 `25b83a47`. Flashed 2026-11-27 with
+`tools/hhkb/hhkb_flasher.py`, 165.08 s, device re-enumerated as `cafe:4014`,
+VIA protocol 0x000C. Runtime identification: VIA custom value id 28 returns
+"26.11.27-b154d9f"; USB serial `26.11.27-b154d9f`. The raw logs referenced
+below live outside the repository (`/tmp/opencode/`, `~/hhkb-test/`), so
+these results are provisional until those logs are committed.
+
+### Remote wakeup / autosuspend: PASS
+
+- Host Linux, USB `1-2`, autosuspend delay 2000 ms. 2026-11-27 19:50 wrote
+  "auto" to `/sys/bus/usb/devices/1-2/power/control`.
+- `runtime_status` timeline: suspended 19:50:27.428, active 19:50:33.016,
+  suspended 19:50:40.627.
+- The keypress landed 5.339 s into the capture window while the device was
+  suspended: evdev code 30 (`KEY_A`) value 1 plus `MSC_SCAN` 458756 (scancode
+  `0x1e`), release at 5.689 s; the character appeared on the host. Repeated
+  presses at 6.190, 8.757 and 10.296 s all delivered while awake.
+- No USB disconnect, reset or error in `dmesg` during the test window;
+  `power/control` restored to "on" afterwards.
+- Logs: `/tmp/opencode/wake.log` (evdev capture),
+  `/tmp/opencode/rtstatus.log` (`runtime_status` samples). The repeated
+  `hid-generic ... input1` lines in `dmesg` are the hidapi libusb backend
+  detaching and the kernel re-probing usbhid on interface 1 on every
+  VIA/console open, not a firmware defect.
+
+### Full calibration on the same image: PARTIAL (capture defect)
+
+Three complete passes (16 settle scans plus 16 counted baseline scans, then
+the press phase) saved 44/60, 39/60 and 45/60 keys. Every pass ended with
+status `Cal: unstable`. The rejected key set was different each pass (for
+example pass 1: `2 9 - Z X V G H L . LCtrl LAlt Space RAlt`; pass 3:
+`Esc Tab 1 2 3` plus `R0C3 R2C5 R2C6 R0C7 R1C5 R0C4 R1C7 R2C7 R1C2 R0C6`),
+which rules out a key-specific reject and a press-pass error; the 14 keys
+listed for pass 1 were typed successfully afterwards, so the matrix and
+switches are healthy.
+
+Mechanism (source review at `4606470b`): every counted scan accumulates per
+cell, so "cell never sampled" is ruled out. The per-window cell gate in
+`keyboards/hhkb/modules/ec/ec_settings.c` (around lines 1150-1157) rejects a
+cell when `|mean(last8) - mean(first8)| > max(8, mean/64)` or
+`max-min > 64` (`CAL_DRIFT_ABS`, `CAL_DRIFT_MEAN_DIV`, `CAL_SPREAD_MAX` are
+unmeasured placeholders, as `docs/analysis/calibration-sag.md` notes). One
+unstable cell restarts ALL cells in a fresh window, up to 8 windows; at the
+cap the cells flagged in the final window are zeroed and `s_cal_unstable`
+latches. A zero base makes `hhkb_cal_record_peak` return early
+(`base < HHKB_CAL_BASE_MIN`), so that key can never be actuated for the rest
+of the session, and finish rejects it, keeping the previously saved range.
+
+Idle drift before any press falsely marked 3 to 12 keys as actuated because
+the calibration press detector uses `base + RT_MIN_RANGE` (150 counts, about
+6 percent of the 2370-count typical travel), while measured idle drift
+reached +160. The finish gate (`peak >= base + 1185`) still refuses to save
+those, so saved data is not corrupted: finish only overwrites
+`s_cal_baseline` for accepted keys.
+
+The sag fix is **not** validated on hardware. The sag-specific check (saved
+base vs resting raw at +1 s and +60 s, 60/60) is still open, blocked by the
+capture rejects. Unit test evidence stands: 83 tests green on the branch, and
+the pre-fix tree fails the sag tests 3+1. Suggested fix direction (not
+implemented): per-key retry that keeps stable cells instead of restarting the
+whole window, count per-key instability across windows and zero only cells
+unstable in several windows, calibrate the drift/spread gates from measured
+per-key noise, and raise the calibration press threshold from `base+150` to a
+travel fraction. Rich per-key logs from the first pass were lost when the
+console listener truncated `/tmp/opencode/cal-step2.raw`; only
+`/tmp/opencode/cal3.raw` (status plus unchanged list) remains.
+
+### RT and actuation sweep: PASS
+
+Same image (sha256 `9d5d8420...` above), 2026-11-27 evening. Method note:
+values are 0.1 mm units on VIA channel 0 (0.4 mm = 4); RT press/release are
+the `s_rt_cfg` values reached through `hhkb_rt_get`/`hhkb_rt_set`
+(`keyboards/hhkb/modules/ec/ec_settings.c`).
+
+| Setting | ID | Value | Result |
+| --- | --- | --- | --- |
+| RT scope | 3 | 1 (7 keys) | `W A S D Space LShift LAlt` |
+| Global actuation point | 1 | 14 (1.4 mm) | kept at 1.4 mm, see below |
+| RT press threshold | 4 | 13 (1.3 mm) | set at the user's direction ("even the rapid trigger keys, they should trigger at like 1.3mm") |
+| RT release hysteresis | 11 | 4 (0.4 mm) | sweep below, left at 0.4 mm |
+| Classic release hysteresis | 5 | 4 (0.4 mm) | unchanged |
+
+The seven RT keys are `W A S D Space LShift LAlt` (`HHKB_RT_KEYS` in
+`keyboards/hhkb/modules/ec/rt_keymask.h` with the LAYOUT mapping).
+
+RT release hysteresis swept at RT press 1.3 mm: 0.5 mm clean, 0.4 mm clean,
+0.3 mm produced chatter on quick taps of `W A S D` and `Space`. The floor is
+0.4 mm; left at 0.4 mm (value 4).
+
+Global actuation point: an initial mistake set it to 0.5 mm, which chattered
+heavily on `l ; , m .` (a typed run of repeats). Restored to 1.4 mm (value
+14) and the chatter stopped. Conclusion recorded: the global actuation point
+stays at 1.4 mm, it is not part of the RT tuning, and short global actuation
+is unusable.
+
+Final saved config: actuation 1.4 mm, RT press 1.3 mm, RT release 0.4 mm, RT
+on the 7 keys, classic hysteresis 0.4 mm. Settings are in EEPROM and survive
+a flash as long as the settings region is not erased.
+
+### Also open
+
+- The claim that the keyboard kept typing during a calibration pass could not
+  be reproduced or explained in source: the single key-event producer
+  suppresses publication while `s_calibration_mode` is true
+  (`keyboards/hhkb/modules/ec/matrix.c`, around lines 315-336) and the same
+  flag gates peak recording in the same task iteration, so sustained typing
+  during live `[CAL]` recording is a logical contradiction. Unconfirmed; not
+  a documented defect.
+
+### Second image, capture retry: calibration PARTIAL, runtime wake PASS, S3 wake FAIL (host EC storm)
+
+Built from `test/remote-wakeup` `4606470b` plus the working-tree capture-retry
+changes in `keyboards/hhkb/modules/ec/ec_settings.c` (per-key retry,
+`CAL_UNSTABLE_LIMIT 3`, press gate at
+`TOPRE_TYPICAL_TRAVEL_COUNTS/4`, release at /8; `CAL_SETTLE_SCANS 16` was
+already in `4606470b`). Image `~/hhkb-test/images/nxmk-cal-retry.hfb`, sha256
+`f122894667d6681d0602a6aeb81e93cb5aa3daf80279d41c6705ee5db763297c`; `.bin`
+sha256 `3d33f2b78894ee3ab27d71026eb55be749a9bd523b9f18af2b9af2e86949b556`;
+text 57468, data+bss 16488. Flashed 20:45 with the same flow as above (Bank 1
+armed with VIA id 37=1 then 64=1, device `04fe:0021`, 165.07 s). Boot version
+`26.11.27-4606470`, VIA protocol 0x000C.
+
+Settings after the flash were retained: id 1 = 14, 2 = 1, 3 = 1, 4 = 13,
+5 = 4, 11 = 4, 13 = 4, 29 = 1.
+
+Calibration: two passes, 57/60 each. Pass 1 rejected A (R3 C3), 8 (R1 C11)
+and Fn (R3 C13); pass 2 rejected Z (R0 C1), Option (R0 C3) and 1/! (R1 C3).
+Rejects per pass fell from 14/18/21 on `9d5d8420` to 3, and the rejected set
+differs per pass, so the residual is per-window noise, not key-specific.
+Rejected keys keep the previously saved range and still type. 60/60 was not
+reached; accepted for this image.
+
+Runtime wake: PASS. With `power/control=auto` and `power/wakeup=enabled`,
+`runtime_status=suspended`, three presses produced `KEY_Q` (16) at
+21:06:46-47; the device returned to `suspended` with no re-enumeration.
+
+S3 sleep with keyboard wake: PASS (21:34 run). Earlier attempts in this
+session were read as instant spurious wakes; that reading was a logging
+artifact and is retracted below.
+
+Conditions: capture-retry image, `pm_debug_messages=1`, keyboard
+`power/wakeup=enabled`, key events logged from `/dev/input/event2`
+(`/tmp/opencode/evlog.py`), RTC alarm armed for +120 s as a fallback, all
+other wake devices at their boot default (LID, SLPB, XHCI enabled).
+
+- 21:34:33 `PM: suspend entry (deep)`.
+- 21:34:58 `Timekeeping suspended for 23.526 seconds`, so the platform was in
+  S3 for 23.5 s, not "about a second".
+- `q` (KEY_Q, code 16) at 21:34:58.188 and `PM: suspend exit` at 21:34:59,
+  with the RTC alarm still about 55 s away: the key press woke the host.
+
+Correction for the earlier attempts (21:10:07, 21:11:57, 21:14:00): kernel
+printk timestamps collapse across S3, so suspend and resume messages carry the
+same resume second and journals cannot be read as "S3 left within a second".
+The 21:14 attempt reports `Timekeeping suspended for 10.553 seconds`, so it
+slept for 10.5 s and something woke it without a keyboard event; the EC GPE
+(GPE16, `PNP0C09` `_GPE 0x16`) still fires 17 to 25/s, which is a candidate,
+but it does not block sleep and no longer gates this validation.
+
+Observation, not a defect claim: one `q` press at 21:34:58 produced five
+repeated KEY_Q down reports (val=1, about 2 ms apart, 21:34:58.188 to
+21:34:58.200) in the evdev log, matching the earlier triple-report seen at
+21:06:46.
+
+The first suspend request at 21:07:55 was refused silently because
+`waybar-caffeine` held a block inhibitor; the user disabled Caffeine.
+`pm_debug_messages` was set back to 0 after the diagnostic run.
