@@ -36,6 +36,8 @@ int main(void) {
     for (unsigned i = 0; i < 60; ++i) assert(hhkb_rt_mask_get(&copy, i));
     copy.bytes[7] = 0xf0;
     assert(!hhkb_rt_mask_valid(&copy));
+    copy.bytes[7] = 0xff; /* all 60 keys plus reserved garbage: not full */
+    assert(!hhkb_rt_mask_valid(&copy) && !hhkb_rt_mask_is_full(&copy));
     unsigned seen = 0;
     for (unsigned c = 0; c < MATRIX_COLS; ++c)
         for (unsigned r = 0; r < MATRIX_ROWS; ++r) {

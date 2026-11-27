@@ -904,6 +904,9 @@ void hhkb_rt_mask_restore(const hhkb_rt_mask_t *mask) {
     // Legacy per-key selections are neither the seven-key default nor the full
     // board, and the 3-way selector only reaches those two. Normalize anything
     // else to the default so a saved custom set cannot leak into mode 1.
+    // Both checks are byte-exact (is_default is a memcmp, is_full requires the
+    // reserved nibble clear), so partial masks, near-matches and reserved-nibble
+    // garbage all count as "anything else".
     if (!hhkb_rt_mask_is_full(&s_rt_mask) && !hhkb_rt_mask_is_default(&s_rt_mask))
         hhkb_rt_mask_default(&s_rt_mask);
     taskEXIT_CRITICAL();

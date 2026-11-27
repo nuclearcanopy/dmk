@@ -82,7 +82,8 @@ int main(void) {
     assert(hhkb_rt_mode_set(0));
     assert(hhkb_rt_mode_get() == 0 && !s_rt_cfg.rt_enabled);
 
-    // Restore normalizes legacy custom masks, keeps the full mask.
+    // Restore accepts exactly the two canonical masks and normalizes every
+    // malformed or legacy mask to the default seven-key set.
     {
         hhkb_rt_mask_t custom;
         hhkb_rt_mask_default(&custom);
@@ -93,6 +94,37 @@ int main(void) {
         hhkb_rt_mask_restore(&custom);
         assert(hhkb_rt_mask_is_full(&s_rt_mask));
         hhkb_rt_mask_default(&custom);
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask));
+
+        // Three arbitrary bits: a partial mask falls back to the default.
+        memset(&custom, 0, sizeof(custom));
+        (void)hhkb_rt_mask_set(&custom, 2, 1);
+        (void)hhkb_rt_mask_set(&custom, 41, 1);
+        (void)hhkb_rt_mask_set(&custom, 59, 1);
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask) && hhkb_rt_mask_valid(&s_rt_mask));
+
+        // Reserved-nibble garbage over the default pattern is not byte-equal
+        // to the default and must also fall back, with the garbage cleared.
+        hhkb_rt_mask_default(&custom);
+        custom.bytes[7] |= 0xf0;
+        assert(!hhkb_rt_mask_is_default(&custom) && !hhkb_rt_mask_is_full(&custom));
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask) && hhkb_rt_mask_valid(&s_rt_mask));
+
+        // All 60 bits plus reserved bits set ("61+ bits") is not the canonical
+        // full mask and must not be kept as full.
+        hhkb_rt_mask_full(&custom);
+        custom.bytes[7] |= 0xf0;
+        assert(!hhkb_rt_mask_is_full(&custom) && !hhkb_rt_mask_valid(&custom));
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask) && hhkb_rt_mask_valid(&s_rt_mask));
+
+        // Near-match: full board minus one key is neither full nor default.
+        hhkb_rt_mask_full(&custom);
+        (void)hhkb_rt_mask_set(&custom, 30, 0);
+        assert(!hhkb_rt_mask_is_full(&custom));
         hhkb_rt_mask_restore(&custom);
         assert(hhkb_rt_mask_is_default(&s_rt_mask));
     }

@@ -44,7 +44,12 @@ static inline void hhkb_rt_mask_full(hhkb_rt_mask_t *mask) {
         (uint8_t)((1u << (HHKB_RT_MASK_BITS % 8)) - 1);
 }
 
+/* "Full" is the byte-exact canonical pattern: all 60 positions set and the
+ * reserved nibble clear, so is_full implies hhkb_rt_mask_valid(). Reserved
+ * nibble garbage disqualifies a mask; hhkb_rt_mask_restore() then treats it
+ * as "anything else" and normalizes to the default. */
 static inline bool hhkb_rt_mask_is_full(const hhkb_rt_mask_t *mask) {
+    if (!hhkb_rt_mask_valid(mask)) return false;
     for (unsigned i = 0; i < HHKB_RT_MASK_BITS; ++i)
         if (!hhkb_rt_mask_get(mask, i)) return false;
     return true;
