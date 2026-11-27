@@ -38,7 +38,6 @@ PREAMBLE = r'''
 static bool s_calibration_mode, s_capture_baseline, s_custom_calibration, s_cal_unstable;
 static uint8_t s_cal_baseline_samples, s_cal_settle_scans, s_cal_windows;
 static uint32_t s_calibrated_mask[MATRIX_MASK_WORDS], s_cal_down_mask[MATRIX_MASK_WORDS];
-static uint32_t s_cal_down_mask[MATRIX_MASK_WORDS];
 static uint16_t s_cal_baseline[MATRIX_COLS][MATRIX_ROWS], s_cal_peak[MATRIX_COLS][MATRIX_ROWS];
 static uint16_t s_cal_press_start_peak[MATRIX_COLS][MATRIX_ROWS];
 static uint16_t s_capture_base[MATRIX_COLS][MATRIX_ROWS], s_capture_peak[MATRIX_COLS][MATRIX_ROWS];

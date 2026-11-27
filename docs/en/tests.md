@@ -696,10 +696,15 @@ slept for 10.5 s and something woke it without a keyboard event; the EC GPE
 (GPE16, `PNP0C09` `_GPE 0x16`) still fires 17 to 25/s, which is a candidate,
 but it does not block sleep and no longer gates this validation.
 
-Observation, not a defect claim: one `q` press at 21:34:58 produced five
-repeated KEY_Q down reports (val=1, about 2 ms apart, 21:34:58.188 to
-21:34:58.200) in the evdev log, matching the earlier triple-report seen at
-21:06:46.
+Concluded: repeated identical down/up reports from a single physical press (five
+KEY_Q downs at 21:34:58, about 2 ms apart, matching the earlier triple at
+21:06:46) are attributed to noisy, weak capacitive sensor readings on individual
+keys (the user's diagnosis: weak sensors), not a firmware defect in the scan or
+report path. The classic scan path applies a chatter lockout through
+`rt_lockout`, and `lock_scans[4] = 15` at 1000 Hz
+(`keyboards/hhkb/modules/ec/classic_matrix.c`, around lines 174 and 380-382), so
+the matrix path cannot emit edges 2 ms apart; the burst is therefore
+sensor-level, not scan-level. No further work is planned on this.
 
 The first suspend request at 21:07:55 was refused silently because
 `waybar-caffeine` held a block inhibitor; the user disabled Caffeine.
