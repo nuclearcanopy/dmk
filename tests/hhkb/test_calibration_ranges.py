@@ -21,6 +21,7 @@ class CalibrationRangesTest(unittest.TestCase):
 #define MATRIX_ROWS ROWS
 #define NUM_KEYS (ROWS==5 ? 69 : 60)
 #define HHKB_CAL_BASE_MIN 20u
+#define TOPRE_TYPICAL_TRAVEL_COUNTS 2370U
 #define DEBUG_FLAG_CAL 8
 static bool s_calibration_mode=true,s_custom_calibration;
 static unsigned dirty;

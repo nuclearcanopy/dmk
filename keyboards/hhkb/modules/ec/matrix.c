@@ -41,6 +41,7 @@ static volatile uint8_t s_scan_divider;
 static uint8_t s_scan_phase;
 static uint8_t s_scan_rate_applied;
 static bool s_scan_calibrating;
+static bool s_scan_capturing;
 #if HHKB_IDLE_SLOW_SCAN
 static idle_scan_t s_idle;
 #endif
@@ -52,9 +53,15 @@ static void update_scan_period(void) {
     s_scan_rate_applied = rate;
     s_scan_period_ticks = period_us[rate] * HHKB_SCAN_TIMER_TICKS_PER_US;
     s_scan_calibrating = hhkb_is_calibrating();
-    // Leave a complete USB service window during calibration at 1 kHz.
-    s_scan_divider = rate == 0 || (rate == 4 && s_scan_calibrating) ? 2 : 1;
+    // Baseline capture runs at the full 1 ms regime so the settle and capture
+    // windows sample the same rate the key press sees (fix/calibration-sag).
+    s_scan_capturing = hhkb_cal_is_capturing_baseline();
+    // Leave a complete USB service window during calibration at 1 kHz, but
+    // only after baseline capture completes (deep press phase).
+    s_scan_divider = rate == 0 || (rate == 4 && s_scan_calibrating && !s_scan_capturing) ? 2 : 1;
     s_scan_phase = 0;
+    // Divider (scan period) change invalidates in-flight capture windows.
+    hhkb_cal_note_scan_period_change();
 #if HHKB_IDLE_SLOW_SCAN
     if (s_idle.slow && !s_scan_calibrating) {
         // Fixed 10 ms timer step (SOF lock keeps working); divider sets period.
@@ -231,7 +238,8 @@ void matrix_task(void *pvParameters) {
         }
 
         if (s_scan_rate_applied != hhkb_get_effective_scan_rate() ||
-            s_scan_calibrating != hhkb_is_calibrating()) {
+            s_scan_calibrating != hhkb_is_calibrating() ||
+            s_scan_capturing != hhkb_cal_is_capturing_baseline()) {
             NVIC_DisableIRQ(TIM2_IRQn);
             update_scan_period();
             TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
