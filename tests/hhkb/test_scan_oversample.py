@@ -11,7 +11,7 @@ class OversampleTest(unittest.TestCase):
         source = (ROOT / "keyboards/hhkb/modules/ec/classic_matrix.c").read_text()
         start = source.index("#if HHKB_RT_OVERSAMPLE == 2")
         end = source.index("#endif", start) + len("#endif")
-        block = source[start:end]
+        block = source[start:end].replace("&snapshot.mask", "&rt_mask")
         harness = r'''
 #include <assert.h>
 #include <stdbool.h>
@@ -22,6 +22,7 @@ class OversampleTest(unittest.TestCase):
 #define MATRIX_COLS 15
 #include "rt_keymask.h"
 static rt_key_t s_rt_keys[15][4];
+static hhkb_rt_mask_t rt_mask;
 static int starts;
 static uint16_t second;
 static void adc_start_sample(void) { ++starts; }
@@ -37,7 +38,7 @@ static unsigned run(bool on, bool cal, bool autoff, int rate, int first_timeout,
     uint16_t val = first_timeout && col==1 && row==2 ? UINT16_MAX : 1000;
     second = second_timeout ? UINT16_MAX : 1003;
     BLOCK
-    if (on && !cal && !autoff && rate==4 && hhkb_rt_slot1_of(col,row) &&
+    if (on && !cal && !autoff && rate==4 && hhkb_rt_mask_member(&rt_mask, col, row) &&
         s_rt_keys[col][row].latched && val != UINT16_MAX) {
       assert(val == (second_timeout ? 1000 : 1002));
     }
@@ -45,6 +46,7 @@ static unsigned run(bool on, bool cal, bool autoff, int rate, int first_timeout,
   return starts;
 }
 int main(void) {
+  hhkb_rt_mask_default(&rt_mask);
   assert(run(true,false,false,4,0,0)==60);
   for (int c=0;c<15;++c) for(int r=0;r<4;++r) s_rt_keys[c][r].latched=true;
   assert(run(true,false,false,4,0,0)==67);

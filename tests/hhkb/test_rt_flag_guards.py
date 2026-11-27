@@ -13,10 +13,6 @@ class RTFlagsTest(unittest.TestCase):
             ["HHKB_RT_KEYMASK=2"], ["HHKB_RT_KEYMASK=1", "HHKB_RT_OVERSAMPLE=1"],
             ["HHKB_RT_KEYMASK=1", "HHKB_RT_DEADBAND=3"],
             ["HHKB_RT_KEYMASK=1", "HHKB_RT_DEADBAND=-1"],
-            ["HHKB_RT_ARBITRARY_SELECTION=1"],
-            ["HHKB_RT_KEYMASK=1", "HHKB_RT_ARBITRARY_SELECTION=1", "HHKB_RT_DEADBAND=1"],
-            ["HHKB_RT_KEYMASK=1", "HHKB_RT_ARBITRARY_SELECTION=1", "HHKB_RT_DEADBAND=2"],
-            ["HHKB_RT_KEYMASK=1", "HHKB_RT_ARBITRARY_SELECTION=2"],
         ]
         for defines in cases:
             result = subprocess.run(["clang", "-E", "-x", "c", "-"] +
@@ -28,6 +24,6 @@ class RTFlagsTest(unittest.TestCase):
                                 input=text, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         result = subprocess.run(["clang", "-E", "-x", "c", "-",
-                                 "-DHHKB_RT_KEYMASK=1", "-DHHKB_RT_ARBITRARY_SELECTION=1"],
+                                 "-DHHKB_RT_KEYMASK=1"],
                                 input=text, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)

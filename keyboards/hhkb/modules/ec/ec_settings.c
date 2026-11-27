@@ -366,7 +366,9 @@ void hhkb_calibration_load(void) {
     s_classic_release_pm = 100;
     s_rt_cfg.press_pm = 25;
     s_rt_cfg.release_pm = 25;
-    s_rt_cfg.rt_enabled = false;
+    // Factory default is mode 1 (seven-key Rapid Trigger): rt_mask_init() above
+    // already set the default mask, so enable RT to match.
+    s_rt_cfg.rt_enabled = true;
     s_debug_flags = 0;
     s_gesc_overrides = 0;
     s_gesc_ignore = 0;
@@ -652,7 +654,11 @@ void hhkb_set_system(uint8_t system) {
 uint8_t hhkb_rt_get(uint8_t id) {
     switch (id) {
     case 1: return s_rt_cfg.act_pm / 25;
+#if HHKB_RT_KEYMASK
+    case 3: return hhkb_rt_mode_get();
+#else
     case 3: return s_rt_cfg.rt_enabled;
+#endif
     case 65: return s_rt_cfg.bottom_dz;
     case 4: return s_rt_cfg.press_pm / 25;
     case 5: return s_classic_release_pm / 25;
@@ -663,6 +669,15 @@ uint8_t hhkb_rt_get(uint8_t id) {
 }
 
 void hhkb_rt_set(uint8_t id, uint8_t value) {
+#if HHKB_RT_KEYMASK
+    if (id == 3) {
+        if (value <= 2) {
+            hhkb_rt_mode_set(value);
+            hhkb_settings_mark_dirty();
+        }
+        return;
+    }
+#endif
     taskENTER_CRITICAL();
     if (id == 65 && value <= 10) {
         s_rt_cfg.bottom_dz = value;
@@ -886,7 +901,38 @@ static void rt_mask_init(void) {
 void hhkb_rt_mask_restore(const hhkb_rt_mask_t *mask) {
     taskENTER_CRITICAL();
     s_rt_mask = *mask;
+    // Legacy per-key selections are neither the seven-key default nor the full
+    // board, and the 3-way selector only reaches those two. Normalize anything
+    // else to the default so a saved custom set cannot leak into mode 1.
+    if (!hhkb_rt_mask_is_full(&s_rt_mask) && !hhkb_rt_mask_is_default(&s_rt_mask))
+        hhkb_rt_mask_default(&s_rt_mask);
     taskEXIT_CRITICAL();
+}
+
+uint8_t hhkb_rt_mode_get(void) {
+    taskENTER_CRITICAL();
+    bool enabled = s_rt_cfg.rt_enabled;
+    bool full = enabled && hhkb_rt_mask_is_full(&s_rt_mask);
+    taskEXIT_CRITICAL();
+    return enabled ? (full ? 2 : 1) : 0;
+}
+
+bool hhkb_rt_mode_set(uint8_t mode) {
+    if (mode > 2) return false;
+    taskENTER_CRITICAL();
+    bool changed = (mode != 0) != s_rt_cfg.rt_enabled;
+    s_rt_cfg.rt_enabled = mode != 0;
+    hhkb_rt_mask_t target;
+    if (mode == 2) hhkb_rt_mask_full(&target);
+    else hhkb_rt_mask_default(&target);
+    if (!hhkb_rt_mask_equal(&target, &s_rt_mask)) {
+        s_rt_mask = target;
+        ++s_rt_mask_revision;
+        s_rt_mask_storage_event = true;
+        changed = true;
+    }
+    taskEXIT_CRITICAL();
+    return changed;
 }
 
 void hhkb_rt_mask_snapshot(hhkb_rt_mask_t *mask) {

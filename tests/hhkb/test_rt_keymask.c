@@ -28,6 +28,12 @@ int main(void) {
     assert(!hhkb_rt_mask_get(&copy, 60));
     assert(!hhkb_rt_mask_member(&copy, MATRIX_COLS, 0));
     assert(!hhkb_rt_mask_member(&copy, 0, MATRIX_ROWS));
+    assert(hhkb_rt_mask_is_default(&mask));
+    assert(!hhkb_rt_mask_is_full(&mask));
+    hhkb_rt_mask_full(&copy);
+    assert(hhkb_rt_mask_is_full(&copy) && hhkb_rt_mask_valid(&copy));
+    assert(!hhkb_rt_mask_is_default(&copy));
+    for (unsigned i = 0; i < 60; ++i) assert(hhkb_rt_mask_get(&copy, i));
     copy.bytes[7] = 0xf0;
     assert(!hhkb_rt_mask_valid(&copy));
     unsigned seen = 0;

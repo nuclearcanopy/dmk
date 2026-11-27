@@ -63,6 +63,40 @@ int main(void) {
     assert(hhkb_rt_key_set(59, 1) == HHKB_RT_MASK_CHANGED);
     assert(s_rt_mask_revision == 0);
     assert(hhkb_rt_key_set(59, 0) == HHKB_RT_MASK_CHANGED);
+
+    // 3-way Rapid Trigger mode: off, seven-key, full, round trip, validity.
+    assert(!s_rt_cfg.rt_enabled && hhkb_rt_mask_is_default(&s_rt_mask));
+    assert(hhkb_rt_mode_get() == 0);
+    assert(hhkb_rt_mode_set(1));
+    assert(hhkb_rt_mode_get() == 1 && s_rt_cfg.rt_enabled);
+    assert(hhkb_rt_mask_is_default(&s_rt_mask));
+    assert(hhkb_rt_mode_set(2));
+    assert(hhkb_rt_mode_get() == 2 && s_rt_cfg.rt_enabled);
+    assert(hhkb_rt_mask_is_full(&s_rt_mask) && hhkb_rt_mask_valid(&s_rt_mask));
+    assert(!hhkb_rt_mode_set(2)); // full again: no change
+    assert(hhkb_rt_mode_get() == 2);
+    assert(hhkb_rt_mode_set(1));
+    assert(hhkb_rt_mode_get() == 1 && hhkb_rt_mask_is_default(&s_rt_mask));
+    assert(!hhkb_rt_mode_set(3)); // invalid mode rejected
+    assert(hhkb_rt_mode_get() == 1);
+    assert(hhkb_rt_mode_set(0));
+    assert(hhkb_rt_mode_get() == 0 && !s_rt_cfg.rt_enabled);
+
+    // Restore normalizes legacy custom masks, keeps the full mask.
+    {
+        hhkb_rt_mask_t custom;
+        hhkb_rt_mask_default(&custom);
+        (void)hhkb_rt_mask_set(&custom, 1, 1); // one extra non-default bit
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask));
+        hhkb_rt_mask_full(&custom);
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_full(&s_rt_mask));
+        hhkb_rt_mask_default(&custom);
+        hhkb_rt_mask_restore(&custom);
+        assert(hhkb_rt_mask_is_default(&s_rt_mask));
+    }
+
     s_rt_cfg = (rt_cfg_t){.rt_enabled = true, .act_pm = 750,
                           .press_pm = 25, .release_pm = 50};
     s_classic_release_pm = 175;

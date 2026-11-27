@@ -137,6 +137,9 @@ typedef struct {
 // Revision is a wrapping change token: consumers compare it for inequality.
 bool hhkb_rt_key_get(unsigned index, bool *value);
 hhkb_rt_mask_result_t hhkb_rt_key_set(unsigned index, unsigned value);
+// 3-way Rapid Trigger mode (VIA ID 3): 0 off, 1 seven-key default, 2 full board.
+uint8_t hhkb_rt_mode_get(void);
+bool hhkb_rt_mode_set(uint8_t mode);
 void hhkb_get_scan_snapshot(hhkb_scan_snapshot_t *snapshot);
 bool hhkb_rt_mask_take_storage_event(void);
 bool hhkb_rt_mask_storage_event_pending(void);

@@ -48,18 +48,24 @@ and is licensed AGPL-3.0-or-later (see [NOTICE.md](../../NOTICE.md)).
 
 ## Rapid Trigger selection
 
-The personal `build_all.sh -d HHKB_HYBRID` build enables arbitrary physical
-key selection with `HHKB_RT_KEYMASK=1` and `HHKB_RT_ARBITRARY_SELECTION=1`.
-Use `--legacy-rt` for config defaults, which leave both features off. Arbitrary
-selection does not support the fixed-seven deadband modes.
+The personal `build_all.sh -d HHKB_HYBRID` build enables the Rapid Trigger key
+mask with `HHKB_RT_KEYMASK=1`. Use `--legacy-rt` for config defaults, which
+leave the mask off (Rapid Trigger then applies globally with no key selection).
 
-Builds with `HHKB_RT_KEYMASK=1` default VIA Rapid Trigger (ID 3) to the
-physical W, A, S, D, Space, left Shift and left Ctrl positions of the default
-ANSI layout. With `HHKB_RT_ARBITRARY_SELECTION=1`, the VIA Rapid Trigger
-settings also select any physical positions independently of the master toggle.
-Selections are persisted in the compact EEPROM snapshot.
-Unselected keys retain fixed actuation and classic release hysteresis. With the
-mask flag off, the original global behavior is unchanged.
+The VIA Rapid Trigger control (ID 3) is a three-way selector:
+
+- **Off**: Rapid Trigger disabled, every key uses fixed actuation and classic
+  release hysteresis.
+- **7 keys**: Rapid Trigger on the physical W, A, S, D, Space, left Shift and
+  left Ctrl positions of the default ANSI layout (the default).
+- **Full board**: Rapid Trigger on all 60 physical positions.
+
+The seven-key set is hardcoded in `modules/ec/rt_keymask.h`
+(`HHKB_RT_KEYS`). The mask is persisted in the compact EEPROM snapshot; older
+snapshots without a mask use the default seven-key set, and a legacy custom
+per-key selection is normalized back to the seven-key default on load. The
+tuning values (actuation point, press/release sensitivity, top/bottom dead
+zones) are unchanged and shared by both enabled modes.
 
 Experimental builds may add `HHKB_RT_OVERSAMPLE=2` at 1 kHz and/or
 `HHKB_RT_DEADBAND=1` (applied) or `=2` (measurement only). Both require the

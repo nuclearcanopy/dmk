@@ -1763,7 +1763,7 @@
               "content": [
                 "Use RT release sensitivity instead of hysteresis."
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "Release hysteresis",
@@ -1970,87 +1970,35 @@
               ]
             },
             {
-              "label": "Rapid Trigger",
-              "type": "toggle",
+              "label": "Rapid Trigger mode",
+              "type": "dropdown",
+              "options": [
+                [
+                  "Off",
+                  0
+                ],
+                [
+                  "7 keys (W A S D, Space, Shift, Ctrl)",
+                  1
+                ],
+                [
+                  "Full board",
+                  2
+                ]
+              ],
               "content": [
                 "id_hhkb_rapid_trigger",
                 0,
                 3
               ]
             },
-            {"label": "Physical key selection", "type": "label", "content": ["Available in arbitrary-selection builds. Positions do not follow remapped keycodes."]},
-            {"label": "Number row", "type": "label", "content": ["Select physical positions"]},
-            {"label": "Escape", "type": "toggle", "content": ["id_hhkb_rt_key_00", 0, 68]},
-            {"label": "1", "type": "toggle", "content": ["id_hhkb_rt_key_01", 0, 69]},
-            {"label": "2", "type": "toggle", "content": ["id_hhkb_rt_key_02", 0, 70]},
-            {"label": "3", "type": "toggle", "content": ["id_hhkb_rt_key_03", 0, 71]},
-            {"label": "4", "type": "toggle", "content": ["id_hhkb_rt_key_04", 0, 72]},
-            {"label": "5", "type": "toggle", "content": ["id_hhkb_rt_key_05", 0, 73]},
-            {"label": "6", "type": "toggle", "content": ["id_hhkb_rt_key_06", 0, 74]},
-            {"label": "7", "type": "toggle", "content": ["id_hhkb_rt_key_07", 0, 75]},
-            {"label": "8", "type": "toggle", "content": ["id_hhkb_rt_key_08", 0, 76]},
-            {"label": "9", "type": "toggle", "content": ["id_hhkb_rt_key_09", 0, 77]},
-            {"label": "0", "type": "toggle", "content": ["id_hhkb_rt_key_10", 0, 78]},
-            {"label": "Minus", "type": "toggle", "content": ["id_hhkb_rt_key_11", 0, 79]},
-            {"label": "Equals", "type": "toggle", "content": ["id_hhkb_rt_key_12", 0, 80]},
-            {"label": "Backslash", "type": "toggle", "content": ["id_hhkb_rt_key_13", 0, 81]},
-            {"label": "Grave", "type": "toggle", "content": ["id_hhkb_rt_key_14", 0, 82]},
-            {"label": "Q row", "type": "label", "content": ["Select physical positions"]},
-            {"label": "Tab", "type": "toggle", "content": ["id_hhkb_rt_key_15", 0, 83]},
-            {"label": "Q", "type": "toggle", "content": ["id_hhkb_rt_key_16", 0, 84]},
-            {"label": "W", "type": "toggle", "content": ["id_hhkb_rt_key_17", 0, 85]},
-            {"label": "E", "type": "toggle", "content": ["id_hhkb_rt_key_18", 0, 86]},
-            {"label": "R", "type": "toggle", "content": ["id_hhkb_rt_key_19", 0, 87]},
-            {"label": "T", "type": "toggle", "content": ["id_hhkb_rt_key_20", 0, 88]},
-            {"label": "Y", "type": "toggle", "content": ["id_hhkb_rt_key_21", 0, 89]},
-            {"label": "U", "type": "toggle", "content": ["id_hhkb_rt_key_22", 0, 90]},
-            {"label": "I", "type": "toggle", "content": ["id_hhkb_rt_key_23", 0, 91]},
-            {"label": "O", "type": "toggle", "content": ["id_hhkb_rt_key_24", 0, 92]},
-            {"label": "P", "type": "toggle", "content": ["id_hhkb_rt_key_25", 0, 93]},
-            {"label": "Left bracket", "type": "toggle", "content": ["id_hhkb_rt_key_26", 0, 94]},
-            {"label": "Right bracket", "type": "toggle", "content": ["id_hhkb_rt_key_27", 0, 95]},
-            {"label": "Delete", "type": "toggle", "content": ["id_hhkb_rt_key_28", 0, 96]},
-            {"label": "Home row", "type": "label", "content": ["Select physical positions"]},
-            {"label": "Left Ctrl", "type": "toggle", "content": ["id_hhkb_rt_key_29", 0, 97]},
-            {"label": "A", "type": "toggle", "content": ["id_hhkb_rt_key_30", 0, 98]},
-            {"label": "S", "type": "toggle", "content": ["id_hhkb_rt_key_31", 0, 99]},
-            {"label": "D", "type": "toggle", "content": ["id_hhkb_rt_key_32", 0, 100]},
-            {"label": "F", "type": "toggle", "content": ["id_hhkb_rt_key_33", 0, 101]},
-            {"label": "G", "type": "toggle", "content": ["id_hhkb_rt_key_34", 0, 102]},
-            {"label": "H", "type": "toggle", "content": ["id_hhkb_rt_key_35", 0, 103]},
-            {"label": "J", "type": "toggle", "content": ["id_hhkb_rt_key_36", 0, 104]},
-            {"label": "K", "type": "toggle", "content": ["id_hhkb_rt_key_37", 0, 105]},
-            {"label": "L", "type": "toggle", "content": ["id_hhkb_rt_key_38", 0, 106]},
-            {"label": "Semicolon", "type": "toggle", "content": ["id_hhkb_rt_key_39", 0, 107]},
-            {"label": "Quote", "type": "toggle", "content": ["id_hhkb_rt_key_40", 0, 108]},
-            {"label": "Return", "type": "toggle", "content": ["id_hhkb_rt_key_41", 0, 109]},
-            {"label": "Shift row", "type": "label", "content": ["Select physical positions"]},
-            {"label": "Left Shift", "type": "toggle", "content": ["id_hhkb_rt_key_42", 0, 110]},
-            {"label": "Z", "type": "toggle", "content": ["id_hhkb_rt_key_43", 0, 111]},
-            {"label": "X", "type": "toggle", "content": ["id_hhkb_rt_key_44", 0, 112]},
-            {"label": "C", "type": "toggle", "content": ["id_hhkb_rt_key_45", 0, 113]},
-            {"label": "V", "type": "toggle", "content": ["id_hhkb_rt_key_46", 0, 114]},
-            {"label": "B", "type": "toggle", "content": ["id_hhkb_rt_key_47", 0, 115]},
-            {"label": "N", "type": "toggle", "content": ["id_hhkb_rt_key_48", 0, 116]},
-            {"label": "M", "type": "toggle", "content": ["id_hhkb_rt_key_49", 0, 117]},
-            {"label": "Comma", "type": "toggle", "content": ["id_hhkb_rt_key_50", 0, 118]},
-            {"label": "Period", "type": "toggle", "content": ["id_hhkb_rt_key_51", 0, 119]},
-            {"label": "Slash", "type": "toggle", "content": ["id_hhkb_rt_key_52", 0, 120]},
-            {"label": "Right Shift", "type": "toggle", "content": ["id_hhkb_rt_key_53", 0, 121]},
-            {"label": "Fn", "type": "toggle", "content": ["id_hhkb_rt_key_54", 0, 122]},
-            {"label": "Bottom row", "type": "label", "content": ["Select physical positions"]},
-            {"label": "Left Option", "type": "toggle", "content": ["id_hhkb_rt_key_55", 0, 123]},
-            {"label": "Left Command", "type": "toggle", "content": ["id_hhkb_rt_key_56", 0, 124]},
-            {"label": "Space", "type": "toggle", "content": ["id_hhkb_rt_key_57", 0, 125]},
-            {"label": "Right Command", "type": "toggle", "content": ["id_hhkb_rt_key_58", 0, 126]},
-            {"label": "Right Option", "type": "toggle", "content": ["id_hhkb_rt_key_59", 0, 127]},
             {
               "label": "Press sensitivity",
               "type": "label",
               "content": [
                 "Downward travel required to re-press after release."
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "RT press sensitivity",
@@ -2242,7 +2190,7 @@
                 0,
                 4
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "Release sensitivity",
@@ -2250,7 +2198,7 @@
               "content": [
                 "Upward travel from the deepest point required to release."
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "RT release sensitivity",
@@ -2442,7 +2390,7 @@
                 0,
                 11
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "Bottom dead zone",
@@ -2498,7 +2446,7 @@
                 0,
                 65
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "Top dead zone",
@@ -2506,7 +2454,7 @@
               "content": [
                 "Returning here releases the key and disarms Rapid Trigger."
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             },
             {
               "label": "Top dead zone",
@@ -2546,7 +2494,7 @@
                 0,
                 6
               ],
-              "showIf": "{id_hhkb_rapid_trigger} == 1"
+              "showIf": "{id_hhkb_rapid_trigger} != 0"
             }
           ],
           "showIf": "{id_firmware_version} == 2 || {id_firmware_version} == 4"

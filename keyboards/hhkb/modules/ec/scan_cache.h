@@ -49,11 +49,7 @@ static __attribute__((noinline)) void hhkb_scan_cache_prepare_snapshot(hhkb_scan
         for (unsigned col = 0; col < MATRIX_COLS; ++col)
             for (unsigned row = 0; row < MATRIX_ROWS; ++row) {
 #if HHKB_RT_KEYMASK
-#if HHKB_RT_ARBITRARY_SELECTION
                 if (!hhkb_rt_mask_member(mask, col, row)) continue;
-#else
-                if (!hhkb_rt_slot1_of(col, row)) continue;
-#endif
 #endif
                 uint16_t v=rt_scan_normalize(&keys[col][row],cache->key[col][row].last_raw,scan);
                 uint16_t bottom=scan->curve ? scan->curve[125] : RT_FULL_SCALE;
@@ -85,11 +81,7 @@ static __attribute__((noinline)) void hhkb_scan_cache_prepare_snapshot(hhkb_scan
             unsigned idx = cache->rebuild_cursor;
 #if HHKB_RT_KEYMASK
             uint8_t col = idx / MATRIX_ROWS, row = idx % MATRIX_ROWS;
-#if HHKB_RT_ARBITRARY_SELECTION
             cache->key[col][row].rt_member = hhkb_rt_mask_member(mask, col, row);
-#else
-            cache->key[col][row].rt_member = hhkb_rt_slot1_of(col, row) != 0;
-#endif
             rt_prepare_raw_cache(&cache->key[col][row], &keys[col][row],
                     hhkb_rt_select_cfg(cache->key[col][row].rt_member, scan, classic));
 #else
@@ -107,9 +99,6 @@ static __attribute__((noinline)) void hhkb_scan_cache_prepare_snapshot(hhkb_scan
 #if HHKB_RT_KEYMASK
     cache->classic_release_pm = classic->classic_release;
     cache->mask_revision = mask_revision;
-#if !HHKB_RT_ARBITRARY_SELECTION
-    (void)mask;
-#endif
 #endif
     cache->valid = true;
     cache->fast_active = fast;

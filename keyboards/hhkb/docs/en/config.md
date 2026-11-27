@@ -50,7 +50,7 @@ Values at first boot or after an EEPROM erase (`ec/ec_settings.c`,
 | ADC oversampling 4x | off (and always bypassed at 1000 Hz) |
 | Actuation point | 1.4 mm nominal (350 per-mille) |
 | Release hysteresis (RT off) | 0.4 mm nominal (100 per-mille) |
-| Rapid Trigger | off |
+| Rapid Trigger | 7 keys (W, A, S, D, Space, left Shift, left Ctrl) |
 | RT press / release sensitivity | 0.1 mm nominal (25 per-mille each) |
 | RT top dead zone | 50 per-mille (0.2 mm nominal) |
 | RT bottom dead zone | 0.5 mm |

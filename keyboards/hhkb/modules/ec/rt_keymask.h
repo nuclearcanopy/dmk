@@ -36,6 +36,20 @@ static inline bool hhkb_rt_mask_equal(const hhkb_rt_mask_t *a, const hhkb_rt_mas
     return memcmp(a->bytes, b->bytes, HHKB_RT_MASK_BYTES) == 0;
 }
 
+/* Full board: all 60 positions set, byte 7 high nibble kept clear so
+ * hhkb_rt_mask_valid() stays true. */
+static inline void hhkb_rt_mask_full(hhkb_rt_mask_t *mask) {
+    memset(mask->bytes, 0xFF, HHKB_RT_MASK_BYTES - 1);
+    mask->bytes[HHKB_RT_MASK_BYTES - 1] =
+        (uint8_t)((1u << (HHKB_RT_MASK_BITS % 8)) - 1);
+}
+
+static inline bool hhkb_rt_mask_is_full(const hhkb_rt_mask_t *mask) {
+    for (unsigned i = 0; i < HHKB_RT_MASK_BITS; ++i)
+        if (!hhkb_rt_mask_get(mask, i)) return false;
+    return true;
+}
+
 #define HHKB_RT_KEYS(X) \
     X(1,2,0) X(3,3,1) X(1,3,2) X(2,3,3) \
     X(6,0,4) X(0,0,5) X(0,3,6)
@@ -47,6 +61,12 @@ static inline void hhkb_rt_mask_default(hhkb_rt_mask_t *mask) {
 #define HHKB_RT_DEFAULT_SET(c,r,s) (void)hhkb_rt_mask_set(mask, (c) * MATRIX_ROWS + (r), 1);
     HHKB_RT_KEYS(HHKB_RT_DEFAULT_SET)
 #undef HHKB_RT_DEFAULT_SET
+}
+
+static inline bool hhkb_rt_mask_is_default(const hhkb_rt_mask_t *mask) {
+    hhkb_rt_mask_t def;
+    hhkb_rt_mask_default(&def);
+    return hhkb_rt_mask_equal(mask, &def);
 }
 #define HHKB_RT_SLOT_INIT(c,r,s) [(c) * MATRIX_ROWS + (r)] = (s) + 1,
 static const uint8_t hhkb_rt_slot1[MATRIX_COLS * MATRIX_ROWS] = {

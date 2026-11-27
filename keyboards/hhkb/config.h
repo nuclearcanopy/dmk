@@ -60,9 +60,6 @@
 #ifndef HHKB_RT_KEYMASK
 #define HHKB_RT_KEYMASK 0
 #endif
-#ifndef HHKB_RT_ARBITRARY_SELECTION
-#define HHKB_RT_ARBITRARY_SELECTION 0
-#endif
 #ifndef HHKB_RT_OVERSAMPLE
 #define HHKB_RT_OVERSAMPLE 0
 #endif
@@ -70,16 +67,12 @@
 #define HHKB_RT_DEADBAND 0
 #endif
 #if (HHKB_RT_KEYMASK != 0 && HHKB_RT_KEYMASK != 1) || \
-    (HHKB_RT_ARBITRARY_SELECTION != 0 && HHKB_RT_ARBITRARY_SELECTION != 1) || \
     (HHKB_RT_OVERSAMPLE != 0 && HHKB_RT_OVERSAMPLE != 2) || \
     (HHKB_RT_DEADBAND < 0 || HHKB_RT_DEADBAND > 2)
 #error "Invalid HHKB RT feature value"
 #endif
 #if !HHKB_RT_KEYMASK && (HHKB_RT_OVERSAMPLE || HHKB_RT_DEADBAND)
 #error "RT oversampling and deadband require HHKB_RT_KEYMASK=1"
-#endif
-#if HHKB_RT_ARBITRARY_SELECTION && (!HHKB_RT_KEYMASK || HHKB_RT_DEADBAND)
-#error "Arbitrary RT selection requires keymask and does not support deadband"
 #endif
 #ifndef HHKB_SCAN_DIAGNOSTICS
 #define HHKB_SCAN_DIAGNOSTICS 1
@@ -124,9 +117,6 @@
 #define NUM_COLS 15
 #if MATRIX_ROWS != NUM_ROWS || MATRIX_COLS != NUM_COLS
 #error "HHKB matrix dimensions must match VIA dimensions"
-#endif
-#if HHKB_RT_ARBITRARY_SELECTION && (!HHKB_COMPACT_STORAGE || MATRIX_ROWS != 4 || MATRIX_COLS != 15)
-#error "Arbitrary RT selection requires compact storage and a 15x4 matrix"
 #endif
 
 // {ROW, COL} coordinate mapping from physical key position to EC matrix (Duncaen / QMK)

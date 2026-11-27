@@ -16,7 +16,6 @@ class ScanMaskPipelineV2(unittest.TestCase):
 #define MATRIX_COLS 15
 #define MATRIX_ROWS 4
 #define HHKB_RT_KEYMASK 1
-#define HHKB_RT_ARBITRARY_SELECTION 1
 #define HHKB_RT_DEADBAND 0
 #include "scan_cache.h"
 #include "scan_transition.h"
@@ -61,7 +60,6 @@ int main(void) {
                 "-I", str(ROOT / "keyboards/hhkb/modules/ec"),
                 "-I", str(ROOT / "dmk_core/include"),
                 "-DMATRIX_COLS=15", "-DMATRIX_ROWS=4", "-DHHKB_RT_KEYMASK=1",
-                "-DHHKB_RT_ARBITRARY_SELECTION=1",
                 str(src), str(ROOT / "keyboards/hhkb/modules/ec/rapid_trigger.c"),
                 "-o", str(exe),
             ], check=True)

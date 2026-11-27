@@ -29,9 +29,10 @@ bash tools/nxmk/check_image.sh              # size and vector gates
   [Config](config.md#build-definitions)).
 - `--build-dir PATH` changes the output directory (default
   `build/hhkb-script`); `-m` adds extra user module directories.
-- The script enables arbitrary RT key selection. Use `--legacy-rt` to leave
-  RT feature flags at their config defaults, or to supply fixed-seven
-  experimental flags explicitly with `-d`.
+- The script enables the Rapid Trigger key mask (`HHKB_RT_KEYMASK=1`), which
+  powers the three-way VIA selector (Off / 7 keys / Full board). Use
+  `--legacy-rt` to leave RT feature flags at their config defaults, or to
+  supply fixed-seven experimental flags explicitly with `-d`.
 
 Output: `build/hhkb-script/nxmk_hhkb_stm32l072.bin` (raw Bank 2 image) and the
 ELF of the same name. The Hybrid build does not produce an `.hfb`; package it

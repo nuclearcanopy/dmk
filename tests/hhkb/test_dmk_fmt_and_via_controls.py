@@ -229,5 +229,5 @@ int main(void) {
         act_tab = next(x for x in definition['menus'][0]['content'] if x['label'] == 'Calibration')
         with_rt = next(x for x in act_tab['content'] if x.get('label') == 'With Rapid Trigger')
         rel_hyst = next(x for x in act_tab['content'] if x.get('label') == 'Release hysteresis')
-        self.assertEqual(with_rt.get('showIf'), '{id_hhkb_rapid_trigger} == 1')
+        self.assertEqual(with_rt.get('showIf'), '{id_hhkb_rapid_trigger} != 0')
         self.assertEqual(rel_hyst.get('showIf'), '{id_hhkb_rapid_trigger} == 0')

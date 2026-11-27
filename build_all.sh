@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$RT_SELECTION" == true ]]; then
-    DEFINE="${DEFINE},HHKB_RT_KEYMASK=1,HHKB_RT_ARBITRARY_SELECTION=1"
+    DEFINE="${DEFINE},HHKB_RT_KEYMASK=1"
 fi
 
 TARGET_NAME="nxmk_${KEYBOARD}_${MCU}"

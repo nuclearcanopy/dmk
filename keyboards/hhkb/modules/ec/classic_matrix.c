@@ -116,12 +116,7 @@ bool scan_process_pending(scan_pending_t *pending, const rt_scan_cfg_t *scan,
 #if HHKB_RT_KEYMASK
     bool cache_valid = hhkb_scan_cache_entry_valid(&s_scan_cache, pending->col, pending->row);
     bool member = cache_valid ? s_scan_cache.key[pending->col][pending->row].rt_member :
-#if HHKB_RT_ARBITRARY_SELECTION
                                 hhkb_rt_mask_member(mask, pending->col, pending->row);
-#else
-                                hhkb_rt_slot1_of(pending->col, pending->row) != 0;
-    (void)mask;
-#endif
     bool mode = member && scan->cfg.rt_enabled;
     if (hhkb_scan_transition(&s_scan_transition[pending->col][pending->row], key,
             &s_scan_cache.key[pending->col][pending->row], scan, mode, pending->raw)) {
@@ -422,18 +417,7 @@ bool hhkb_matrix_scan_raw(matrix_row_t current_matrix[]) {
             // allows Nordic SPI after triggering; USB stays masked until EOC.
             if (adc_autoff) __set_PRIMASK(saved_primask);
             uint16_t val = started ? adc_finish_sample() : UINT16_MAX;
-#if !HHKB_RT_ARBITRARY_SELECTION
 #if HHKB_RT_OVERSAMPLE == 2
-            if (val != UINT16_MAX && !adc_autoff && !is_calibrating &&
-                lock_rate == 4 && scan_cfg.rt_enabled && hhkb_rt_slot1_of(col, row) &&
-                s_rt_keys[col][row].latched) {
-                adc_start_sample();
-                uint16_t second = adc_finish_sample();
-                if (second != UINT16_MAX) val = ((uint32_t)val + second + 1) >> 1;
-            }
-#endif
-#endif
-#if HHKB_RT_ARBITRARY_SELECTION && HHKB_RT_OVERSAMPLE == 2
             if (val != UINT16_MAX && !adc_autoff && !is_calibrating &&
                 lock_rate == 4 && scan_cfg.rt_enabled &&
                 hhkb_rt_mask_member(&snapshot.mask, col, row) &&

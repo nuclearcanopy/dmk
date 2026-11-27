@@ -100,7 +100,7 @@ controls are shown only when **Use travel curve** is on.
 
 | Control | ID | Range |
 | --- | ---: | --- |
-| Rapid Trigger | 3 | toggle |
+| Rapid Trigger mode | 3 | Off / 7 keys / Full board |
 | RT press sensitivity | 4 | 0.1-4.5 mm |
 | RT release sensitivity | 11 | 0.1-4.5 mm |
 | Top dead zone | 6 | 0.0-0.6 mm |
@@ -110,15 +110,15 @@ The sensitivity and dead zone controls are shown only with Rapid Trigger on. The
 how far above bottom-out the release anchor stops following finger pressure
 (`bottom_dz * 25` per-mille in `rapid_trigger.c`).
 
-The physical-position toggles (channel 0, IDs 68-127) require a build with
-`HHKB_RT_KEYMASK=1` and `HHKB_RT_ARBITRARY_SELECTION=1`. The shared definition
-also displays them on other builds, where those IDs are unsupported. Positions
-follow the ANSI layout, not keycodes or layers. The default selection is W, A,
-S, D, Space, left Shift and left Ctrl. Selection is independent of master ID 3:
-when it is off, selected keys also use classic behavior; unselected keys always
-use classic behavior. The mask is saved in the compact EEPROM snapshot; older
-snapshots without a mask use the default selection. The VIA definition has not
-been validated in the GUI, and this does not add a Vial custom-settings UI.
+Rapid Trigger mode (ID 3) has three choices: **Off** disables Rapid Trigger
+everywhere; **7 keys** enables it on the physical W, A, S, D, Space, left Shift
+and left Ctrl positions (the default); **Full board** enables it on all 60
+physical positions. Positions follow the ANSI layout, not keycodes or layers.
+The mode is stored as the master toggle plus the key mask in the compact EEPROM
+snapshot; older snapshots without a mask use the default seven-key set. A legacy
+custom per-key selection is normalized to the default on load. The VIA
+definition has not been validated in the GUI, and this does not add a Vial
+custom-settings UI.
 
 ### LED
 

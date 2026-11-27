@@ -14,13 +14,6 @@ static void copy_str28(char *dst, const char *src) {
     dst[28] = '\0';
 }
 
-#if HHKB_RT_ARBITRARY_SELECTION
-/* VIA ordinals follow physical LAYOUT order; mask indices are column-major. */
-static const uint8_t via_rt_positions[][2] = LAYOUT;
-_Static_assert(sizeof(via_rt_positions) / sizeof(via_rt_positions[0]) == HHKB_RT_MASK_BITS,
-               "VIA RT positions must cover the physical matrix");
-#endif
-
 static uint8_t debug_flag_for_id(uint8_t id) {
     switch (id) {
         case 19: return DEBUG_FLAG_TOPRE;
@@ -45,21 +38,6 @@ bool via_custom_value_command_kb(uint8_t const *request, uint8_t *response) {
     bool is_get = (op == 0x08);
     uint8_t id = request[2];
     uint8_t val = request[3];
-
-#if HHKB_RT_ARBITRARY_SELECTION
-    if (id >= 68 && id < 68 + HHKB_RT_MASK_BITS) {
-        const uint8_t *pos = via_rt_positions[id - 68];
-        unsigned index = pos[1] * MATRIX_ROWS + pos[0];
-        if (is_get) {
-            bool selected;
-            if (!hhkb_rt_key_get(index, &selected)) return false;
-            response[3] = selected;
-        } else if (val > 1 || hhkb_rt_key_set(index, val) == HHKB_RT_MASK_INVALID) {
-            return false;
-        }
-        return true;
-    }
-#endif
 
     if (id == 66) {
         if(request[0] == 0x08) response[3]=hhkb_gesc_ignore();
