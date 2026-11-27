@@ -52,7 +52,7 @@ int main(void) {
     assert(matrix[3] & (1u<<14));
 }
 '''.replace("PROCESSOR", processor)
-        with tempfile.TemporaryDirectory(dir="/tmp/opencode") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "pipeline.c"
             src.write_text(code)
             exe = Path(tmp) / "pipeline"
