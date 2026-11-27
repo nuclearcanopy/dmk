@@ -6,6 +6,7 @@
 #include "task_internal.h"
 #include "config.h"
 #include "tusb.h"
+#include "usb.h"
 #include "sof_lock.h"
 #include "stall_diag.h"
 #ifdef HHKB_HYBRID
@@ -36,6 +37,10 @@ uint32_t hhkb_matrix_stack_hwm(void) {
     return s_matrix_task ? uxTaskGetStackHighWaterMark(s_matrix_task) : 0;
 }
 #endif
+
+void keyboard_usb_resume_cb(void) {
+    if (s_matrix_task != NULL) xTaskNotifyGive(s_matrix_task);
+}
 static volatile uint16_t s_scan_period_ticks;
 static volatile uint8_t s_scan_divider;
 static uint8_t s_scan_phase;
@@ -200,9 +205,10 @@ void matrix_task(void *pvParameters) {
             hhkb_hybrid_enter_stop();
         }
 #endif
-        // Check power saving condition: host disconnected (not mounted) or USB suspended
+        // Check power saving condition: host disconnected (not mounted) or USB suspended without remote wakeup
+        bool remote_wake_suspend = tud_mounted() && tud_suspended() && usb_remote_wakeup_enabled();
         bool usb_power_saving = keyboard_power_saving_enabled() &&
-                                (!tud_mounted() || tud_suspended());
+                                (!tud_mounted() || (tud_suspended() && !remote_wake_suspend));
         if (usb_power_saving) {
             if (!sensor_power_down) {
                 // Stop scan interrupts as well as the analog hardware.
@@ -230,11 +236,16 @@ void matrix_task(void *pvParameters) {
 #if HHKB_IDLE_SLOW_SCAN
             idle_scan_init(&s_idle, xTaskGetTickCount() * portTICK_PERIOD_MS);
 #endif
+#if HHKB_SOF_LOCK
+            sof_lock_reset();
+#endif
             update_scan_period();
             TIM2->CCR1 = (uint16_t)(TIM2->CNT + s_scan_period_ticks);
             TIM2->SR = 0;
             NVIC_ClearPendingIRQ(TIM2_IRQn);
+            NVIC_EnableIRQ(TIM2_IRQn);
             TIM2->DIER |= TIM_DIER_CC1IE;
+            TIM2->CR1 |= TIM_CR1_CEN;
         }
 
         if (s_scan_rate_applied != hhkb_get_effective_scan_rate() ||
