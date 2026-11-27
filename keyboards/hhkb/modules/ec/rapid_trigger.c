@@ -6,9 +6,9 @@ uint32_t rt_range_revision;
 void rt_cfg_defaults(rt_cfg_t *c) {
     c->rt_enabled = false;
     c->bottom_dz  = 5;
-    c->act_pm     = 750;  /* 75 % of range                   */
-    c->press_pm   = 30;   /* 3 %                             */
-    c->release_pm = 30;   /* 3 %                             */
+    c->act_pm     = 350;  /* 35 % of range (1.4 mm)          */
+    c->press_pm   = 25;   /* 2.5 %                           */
+    c->release_pm = 25;   /* 2.5 %                           */
     c->reset_pm   = 50;   /* 5 % dead zone near the top      */
 }
 

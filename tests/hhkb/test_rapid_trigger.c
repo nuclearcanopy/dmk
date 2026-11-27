@@ -17,6 +17,9 @@ static void setup(bool rt) {
     rt_cfg_defaults(&cfg);
     cfg.rt_enabled = rt;
     cfg.bottom_dz = 0;
+    cfg.act_pm = 750;
+    cfg.press_pm = 30;
+    cfg.release_pm = 30;
     rt_key_set_range(&key, BASE, PEAK);
     rt_key_reset(&key);
 }
